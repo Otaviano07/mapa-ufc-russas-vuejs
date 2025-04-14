@@ -32,14 +32,13 @@ const classes = computed(() => ({
 </template>
 
 <style scoped>
-/* Estilos específicos para local-item já estão em main.css */
-/* Se precisar de algo MUITO específico, adicione aqui */
+/* Estilos específicos para local-item já estão em main.css 
 .local-item {
-  /* Herdado de main.css */
+  
 }
 .local-item.selected {
- /* Herdado de main.css */
-}
+ 
+}*/
 span {
     font-size: 0.8em;
     color: #666;

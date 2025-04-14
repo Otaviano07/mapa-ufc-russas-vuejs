@@ -14,8 +14,8 @@ const campusReferenceCoordinates = {
 // Se o ponto de referência é o centro (50,50), ajuste a lógica de conversão.
 // Vamos assumir que (0,0) no mapa % corresponde a campusReferenceCoordinates
 const campusDimensions = {
-  widthMeters: 500,  // Largura total coberta pelo mapa em metros
-  heightMeters: 350, // Altura total coberta pelo mapa em metros
+  widthMeters: 1500,  // Largura total coberta pelo mapa em metros
+  heightMeters: 1200, // Altura total coberta pelo mapa em metros
 };
 // --- Fim Configurações ---
 

@@ -85,7 +85,6 @@ export function useMapInteraction(initialScale = 1, minScale = 0.5, maxScale = 3
   /** Ativa o modo de definir localização manual */
   const enableSetUserLocationMode = () => {
       settingUserLocationMode.value = true;
-      // Poderia retornar uma mensagem para exibir ao usuário, ex: "Clique no mapa para definir sua localização"
   };
 
 

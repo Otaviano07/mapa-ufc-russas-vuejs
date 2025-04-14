@@ -170,7 +170,7 @@
   pointer-events: none; /* Linha não deve ser clicável */
  }
  /* Opcional: Indicador de direção (se desejar) */
- /*
+
  .path-line::after {
   content: '';
   position: absolute;
@@ -183,7 +183,7 @@
   border-bottom: 4px solid transparent;
   border-left: 6px solid var(--path-color);
  }
- */
+
  /* Popup de Informação do Marcador */
  .location-popup {
   position: absolute;
