@@ -1,85 +1,216 @@
-// Dados dos locais (simulando uma API)
-const locaisData = [
-    { id: 1, nome: "Extensão Centro", x: 28, y: 60, andar: "terreo" },
-    { id: 2, nome: "Bloco A Didático/Administrativo", x: 44, y: 46, andar: "terreo" },
-    { id: 3, nome: "Bloco B Laboratórios/Administrativo", x: 49, y: 46, andar: "terreo" },
-    { id: 4, nome: "Galpão de laboratórios", x: 49, y: 29, andar: "terreo" },
-    { id: 5, nome: "Bloco C", x: 45, y: 49, andar: "primeiro" }, // Exemplo 1º andar
-    { id: 6, nome: "Bloco D", x: 49, y: 49, andar: "primeiro" }, // Exemplo 1º andar
-    { id: 7, nome: "Restaurante Universitário (RU)", x: 60, y: 66, andar: "terreo" },
-    { id: 8, nome: "Prefeitura do Campus", x: 37, y: 48, andar: "terreo" },
-    { id: 9, nome: "Parque Tecnológico", x: 72, y: 82, andar: "terreo" },
-    // Adicione outros locais conforme necessário
-];
+// src/services/LocationService.js
+import { ref } from 'vue';
 
-// Dados dos waypoints (simulando uma API)
-const campusWaypointsData = [
-    { id: "w1", x: 40, y: 60, connections: ["w2", "w3"], andar: "terreo" }, // Entrada principal
-    { id: "w2", x: 42, y: 52, connections: ["w1", "w4", "w5", "e1"], andar: "terreo" }, // Bifurcação principal (Adicionada conexão com escada e1)
-    { id: "w3", x: 28, y: 60, connections: ["w1"], andar: "terreo" }, // Extensão Centro
-    { id: "w4", x: 37, y: 48, connections: ["w2", "w6"], andar: "terreo" }, // Prefeitura do Campus
-    { id: "w5", x: 44, y: 46, connections: ["w2", "w7"], andar: "terreo" }, // Bloco A
-    { id: "w6", x: 37, y: 42, connections: ["w4", "w7"], andar: "terreo" }, // Corredor oeste
-    { id: "w7", x: 49, y: 46, connections: ["w5", "w6", "w8", "w9"], andar: "terreo" }, // Bloco B
-    { id: "w8", x: 49, y: 29, connections: ["w7"], andar: "terreo" }, // Galpão de laboratórios
-    { id: "w9", x: 54, y: 52, connections: ["w7", "w10"], andar: "terreo" }, // Corredor leste
-    { id: "w10", x: 60, y: 66, connections: ["w9", "w11"], andar: "terreo" }, // Restaurante Universitário (ajustado w11)
-    { id: "w11", x: 72, y: 82, connections: ["w10"], andar: "terreo" }, // Parque Tecnológico
+// --- Configuração da API ---
+const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
 
-    // Waypoints do primeiro andar
-    { id: "w101", x: 45, y: 49, connections: ["w102", "w103"], andar: "primeiro" }, // Bloco C
-    { id: "w102", x: 49, y: 49, connections: ["w101"], andar: "primeiro" }, // Bloco D
-    { id: "w103", x: 45, y: 55, connections: ["w101", "e1"], andar: "primeiro" }, // Escada (Adicionada conexão com escada e1)
-
-    // Conexões entre andares (exemplo de escada)
-    // 'conectaAndar' aponta para o ID do waypoint no *outro* andar
-    // A conexão normal em 'connections' é para o waypoint *neste* andar que leva à escada
-    { id: "e1", x: 45, y: 55, connections: ["w2"], andar: "terreo", conectaAndar: "w103" }, // Escada no térreo, conectada a w2, leva para w103 (1º andar)
-    // Nota: O waypoint w103 no primeiro andar também se conecta a 'e1' implicitamente pela regra de conexão entre andares.
-    // Ou pode-se adicionar explicitamente em w103: connections: ["w101", "e1"], andar: "primeiro", conectaAndar: "e1" (do terreo) - depende da implementação do algoritmo
-];
-
-// Dados dos Andares
-const floorsData = [
-  {
-    id: "terreo",
-    name: "Térreo",
-    // Substitua pela URL real ou importe a imagem se estiver local
-    image: "https://mmkbapkywiapbirvfuez.supabase.co/storage/v1/object/sign/imagem/campusRussas.jpg?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InN0b3JhZ2UtdXJsLXNpZ25pbmcta2V5X2JjYWQzOGJILTA1ZjEtNDBhNC1hNGQxLTNiN2VlYWM1ZWI5YyJ9.eyJ1cmwiOiJpbWF nZW0vY2FtcHVzUnVzc2FzLmpwZyIsImlhdCI6MTc0NDYyNzY5MiwiZXhwIjoxNzQ1MjMyN DkyfQ.hNC_m0h1cEJ9Kw63Zpq-tvCn5yXweB-hxkdAHCOn7q0",
-  },
-  {
-    id: "primeiro",
-    name: "1º Andar",
-     // Substitua pela URL real ou importe a imagem se estiver local
-    image: "https://mmkbapkywiapbirvfuez.supabase.co/storage/v1/object/sign/imagem/campusRussas.jpg?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InN0b3JhZ2UtdXJsLXNpZ25pbmcta2V5X2JjYWQzOGJILTA1ZjEtNDBhNC1hNGQxLTNiN2VlYWM1ZWI5YyJ9.eyJ1cmwiOiJpbWF nZW0vY2FtcHVzUnVzc2FzLmpwZyIsImlhdCI6MTc0NDYyNzY5MiwiZXhwIjoxNzQ1MjMyN DkyfQ.hNC_m0h1cEJ9Kw63Zpq-tvCn5yXweB-hxkdAHCOn7q0", // Usando a mesma imagem como exemplo
-  },
-];
-
-
-/**
- * Busca os dados dos locais.
- * @returns {Promise<Array>} Uma promessa que resolve com a lista de locais.
- */
-export const fetchLocais = async () => {
-  // Simula um delay de API
-  await new Promise(resolve => setTimeout(resolve, 50));
-  console.log("Locais carregados:", locaisData);
-  return locaisData;
-};
-
-/**
- * Retorna os dados dos waypoints.
- * @returns {Array} A lista de waypoints.
- */
-export const getWaypoints = () => {
-  console.log("Waypoints carregados:", campusWaypointsData);
-  return campusWaypointsData;
-};
-
-/**
- * Retorna os dados dos andares.
- * @returns {Array} A lista de andares.
- */
-export const getFloors = () => {
-  return floorsData;
+if (!API_URL) {
+  console.error("VITE_GOOGLE_APPS_SCRIPT_URL não está definida no arquivo .env. As chamadas de API falharão.");
 }
+
+// Estados globais do serviço (podem ser usados pelos componentes se necessário)
+const loading = ref(false);
+const error = ref(null);
+const successMessage = ref(null);
+
+// Helper para limpar mensagens
+function clearMessages() {
+  setTimeout(() => {
+    error.value = null;
+    successMessage.value = null;
+  }, 5000);
+}
+
+/**
+ * Função interna genérica para chamar a API.
+ * @param {object} params - Parâmetros para enviar (inclui 'action').
+ * @param {string} method - Método HTTP ('GET', 'POST', etc.). GET é o padrão.
+ * @returns {Promise<object|null>} - Os dados da resposta ou null em caso de erro.
+ */
+async function callApi(params = {}, method = 'GET') {
+  if (!API_URL) {
+    const errorMessage = "URL da API não configurada no .env.";
+    error.value = errorMessage;
+    console.error(errorMessage);
+    return null;
+  }
+
+  loading.value = true;
+  error.value = null; // Limpa erro anterior
+  // Não limpa successMessage aqui, pois pode ser de uma operação anterior bem-sucedida
+
+  let url = API_URL;
+  let options = {
+    method: method,
+    mode: 'cors', // Necessário para requisições cross-origin
+    headers: {},
+  };
+
+  const queryParams = new URLSearchParams();
+  for (const key in params) {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      queryParams.append(key, params[key]);
+    }
+  }
+
+  if (method === 'GET' || method === 'DELETE') { // DELETE também pode usar query params
+    url += `?${queryParams.toString()}`;
+  } else if (method === 'POST' || method === 'PUT') {
+    // Exemplo: enviando como form data (comum com Apps Script doGet/doPost simples)
+    // Se o Apps Script espera JSON, use JSON.stringify e 'application/json' header
+    options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    options.body = queryParams.toString();
+    // Precisa adicionar a action na URL também se o doPost a ler de lá
+    const actionParam = params.action ? `?action=${encodeURIComponent(params.action)}` : '';
+     url += actionParam;
+  }
+
+  console.log(`Chamando API (${params.action || 'N/A'}) | Método: ${method} | URL:`, url);
+  if (options.body) console.log("Body:", options.body);
+
+  try {
+    const response = await fetch(url, options);
+
+    let result;
+    const contentType = response.headers.get("content-type");
+
+    if (contentType && contentType.includes("application/json")) {
+      result = await response.json();
+    } else {
+      const textResponse = await response.text();
+      console.warn(`Resposta da API não é JSON (Content-Type: ${contentType}). Texto:`, textResponse.substring(0, 500));
+       if (response.status === 302 || textResponse.toLowerCase().includes('<title>autorização necessária</title>') || textResponse.toLowerCase().includes('required permissions')) {
+           throw new Error(`Falha na API: Possível erro de permissão ou URL /dev inválida. Verifique permissões da Web App e use a URL /exec.`);
+       }
+       throw new Error(`Resposta inesperada (não-JSON): Status ${response.status}. Resposta: ${textResponse.substring(0, 150)}...`);
+    }
+
+    console.log("Resposta da API:", result);
+
+    if (!response.ok || result.status === 'error' || result.error) {
+      const errorMessage = result?.message || result?.error || `Erro HTTP ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    // Define mensagem de sucesso apenas para operações CRUD que não sejam de leitura
+    const readActions = ['read', 'readAll', 'readLocais', 'readWaypoints', 'readFloors']; // Adicione outras ações de leitura se houver
+    if (params.action && !readActions.includes(params.action)) {
+        successMessage.value = result.message || 'Operação realizada com sucesso!';
+        clearMessages(); // Limpa a msg de sucesso após um tempo
+    }
+
+    return result;
+
+  } catch (err) {
+    console.error(`Erro na API action=${params.action || 'N/A'}, method=${method}:`, err);
+    error.value = `Falha na operação (${params.action || 'leitura'}): ${err.message}`;
+    // Não limpa a msg de erro automaticamente aqui, deixa o componente decidir
+    return null;
+  } finally {
+    loading.value = false;
+  }
+}
+
+// --- Funções Exportadas ---
+
+/**
+ * Busca todos os dados iniciais necessários para o mapa.
+ * @returns {Promise<{locais: Array, waypoints: Array, floors: Array}|null>}
+ */
+export const fetchInitialData = async () => {
+  // Assume que GET sem 'action' ou com 'action=readAll' retorna tudo
+  const result = await callApi({ action: 'readAll' }, 'GET'); // Ou apenas callApi()
+
+  if (result && result.status === 'success') {
+    const locais = result.locais || [];
+    const waypoints = result.waypoints || [];
+    const floors = result.floors || [];
+
+    if (!Array.isArray(locais) || !Array.isArray(waypoints) || !Array.isArray(floors)) {
+      console.error("Formato de dados inesperado em fetchInitialData:", result);
+      error.value = "Formato de dados inválido da API.";
+      return null;
+    }
+    console.log("Dados iniciais carregados via API.");
+    return { locais, waypoints, floors };
+  } else {
+    // Erro já tratado em callApi e armazenado em error.value
+    return null;
+  }
+};
+
+/**
+ * Busca apenas os locais (para o Admin Panel, por exemplo).
+ * @returns {Promise<Array|null>}
+ */
+export const fetchAdminLocations = async () => {
+    // Assume que action=read retorna apenas locais, como no LocationAdmin original
+    const result = await callApi({ action: 'read' }, 'GET');
+    if (result && result.status === 'success') {
+        const locais = result.locais || [];
+        if (!Array.isArray(locais)) {
+            console.error("Formato de locais inesperado em fetchAdminLocations:", result);
+            error.value = "Formato de locais inválido da API.";
+            return null;
+        }
+        return locais;
+    } else {
+        return null;
+    }
+}
+
+
+/**
+ * Cria um novo local via API.
+ * @param {object} locationData - { nome, endereco, andar }.
+ * @returns {Promise<boolean>} - True se sucesso, false se falha.
+ */
+export const createLocation = async (locationData) => {
+   // Usando POST como exemplo - ajuste o método se seu Apps Script usar GET
+  const result = await callApi({
+    action: 'create',
+    nome: locationData.nome,
+    endereco: locationData.endereco,
+    andar: locationData.andar
+  }, 'POST'); // Mude para 'GET' se necessário
+  return !!result; // True se a chamada foi bem-sucedida
+};
+
+/**
+ * Atualiza um local existente via API.
+ * @param {object} locationData - { id, nome?, endereco?, andar? }.
+ * @returns {Promise<boolean>} - True se sucesso, false se falha.
+ */
+export const updateLocation = async (locationData) => {
+   // Usando POST como exemplo - ajuste o método se seu Apps Script usar GET
+  const params = {
+    action: 'update',
+    id: locationData.id,
+    ...(locationData.nome && { nome: locationData.nome }),
+    ...(locationData.endereco && { endereco: locationData.endereco }),
+    ...(locationData.andar && { andar: locationData.andar }),
+    // Adicione x, y se forem editáveis
+    // ...(locationData.x !== undefined && { x: locationData.x }),
+    // ...(locationData.y !== undefined && { y: locationData.y }),
+  };
+  const result = await callApi(params, 'POST'); // Mude para 'GET' se necessário
+  return !!result;
+};
+
+/**
+ * Exclui um local via API.
+ * @param {string|number} id - ID do local a ser excluído.
+ * @returns {Promise<boolean>} - True se sucesso, false se falha.
+ */
+export const deleteLocation = async (id) => {
+  // Usando POST como exemplo - ajuste o método se seu Apps Script usar GET
+  const result = await callApi({ action: 'delete', id: id }, 'POST'); // Mude para 'GET' ou 'DELETE' se necessário
+  return !!result;
+};
+
+// Exporta os estados reativos para observação externa, se necessário
+export const locationServiceState = {
+    loading,
+    error,
+    successMessage
+};

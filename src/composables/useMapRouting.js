@@ -1,25 +1,53 @@
-import { ref, watch } from 'vue';
-import { getWaypoints } from '@/services/LocationService'; // Use @ para alias de src/
+// src/composables/useMapRouting.js
+import { ref, watch, computed } from 'vue';
+// Não importa mais getWaypoints daqui
 
-export function useMapRouting(userPosition, selectedLocal, currentFloor, mapScale, mapDimensions) {
+export function useMapRouting(userPosition, selectedLocal, currentFloor, mapScale, mapDimensions, waypointsDataRef) {
   const routeSegments = ref([]); // Array de { x, y, length, angle }
   const hasRoute = ref(false);
   const debugWaypoints = ref([]); // Para visualizar waypoints no mapa
   const routingError = ref(null);
 
-  const waypoints = getWaypoints();
-  const waypointMap = {};
-  waypoints.forEach(wp => { waypointMap[wp.id] = wp; });
+  // Mapa de waypoints (ID -> waypoint object) - será atualizado pelo watcher
+  const waypointMap = ref({});
+  const currentFloorWaypoints = ref([]); // Waypoints apenas do andar atual
+
+  // Observa o Ref de waypoints passado como argumento e atualiza o mapa interno
+  watch(waypointsDataRef, (newWaypointsData) => {
+    console.log("Waypoints recebidos/atualizados no useMapRouting:", newWaypointsData);
+    const newMap = {};
+    if (Array.isArray(newWaypointsData)) {
+      newWaypointsData.forEach(wp => { newMap[wp.id] = wp; });
+    }
+    waypointMap.value = newMap;
+    // Dispara um recálculo da rota se os waypoints mudarem e já houver usuário/destino
+    if (userPosition.value && selectedLocal.value) {
+        calculateRoute();
+    }
+  }, { deep: true, immediate: true }); // immediate: true para processar os waypoints iniciais
+
+   // Filtra waypoints do andar atual reativamente
+  watch([currentFloor, waypointsDataRef], () => {
+     const floorId = currentFloor.value;
+     const allWaypoints = waypointsDataRef.value || [];
+     currentFloorWaypoints.value = allWaypoints.filter(wp => wp.andar === floorId);
+     // Opcional: recalcular rota se o andar mudar (já coberto pelo watcher principal?)
+  }, { deep: true, immediate: true });
+
 
   // --- Funções Auxiliares Internas ---
 
-  /** Encontra o waypoint mais próximo de um ponto (x, y) em um andar específico */
+  /** Encontra o waypoint mais próximo de um ponto (x, y) *no andar atual* */
   const findNearestWaypoint = (x, y, andar) => {
     let nearest = null;
-    let minDistanceSq = Infinity; // Comparar quadrados evita raiz quadrada
+    let minDistanceSq = Infinity;
+    const waypointsToSearch = currentFloorWaypoints.value; // Usa a lista pré-filtrada
 
-    for (const waypoint of waypoints) {
-      if (waypoint.andar !== andar) continue;
+    console.log(`Buscando waypoint mais próximo para (${x}, ${y}) no andar ${andar} entre ${waypointsToSearch.length} waypoints.`);
+
+
+    for (const waypoint of waypointsToSearch) {
+      // Não precisa mais checar o andar aqui, já está filtrado
       const dx = waypoint.x - x;
       const dy = waypoint.y - y;
       const distanceSq = dx * dx + dy * dy;
@@ -29,52 +57,39 @@ export function useMapRouting(userPosition, selectedLocal, currentFloor, mapScal
         nearest = waypoint;
       }
     }
+     if (!nearest) {
+        console.warn(`Nenhum waypoint encontrado no andar ${andar}`);
+     }
     return nearest;
   };
 
-  /** Algoritmo de Dijkstra para encontrar o caminho mais curto entre waypoints */
+  /** Algoritmo de Dijkstra para encontrar o caminho mais curto entre waypoints *no mesmo andar* */
+  // TODO: Adaptar para multi-andar se necessário usando 'conectaAndar'
   const findShortestPath = (startId, endId) => {
     const distances = {};
     const previous = {};
     const unvisited = new Set();
+    const currentMap = waypointMap.value; // Usa o mapa reativo
 
-    // Inicialização
-    waypoints.forEach(wp => {
-      // Considera apenas waypoints do andar atual ou pontos de conexão entre andares
-      // A lógica de Dijkstra precisa ser adaptada para multi-andares se necessário
-      // Por ora, focamos em rotas no mesmo andar.
-      if (wp.andar === currentFloor.value) {
-          distances[wp.id] = wp.id === startId ? 0 : Infinity;
-          previous[wp.id] = null;
-          unvisited.add(wp.id);
-      } else {
-          // Inicializa distâncias para outros andares como infinito,
-          // a menos que seja um ponto de conexão direto.
-          // Lógica mais complexa necessária para rotas multi-andar completas.
-           distances[wp.id] = Infinity;
-           previous[wp.id] = null;
-      }
+    // Inicialização apenas para o andar atual
+    currentFloorWaypoints.value.forEach(wp => {
+        distances[wp.id] = wp.id === startId ? 0 : Infinity;
+        previous[wp.id] = null;
+        unvisited.add(wp.id);
     });
 
-
-     // Garante que o ponto de partida esteja no conjunto, mesmo que seja ponto de conexão
-     if(waypointMap[startId]){
-        distances[startId] = 0;
-        unvisited.add(startId);
-     } else {
-         console.error("Waypoint inicial não encontrado:", startId);
-         return null; // Ponto de partida inválido
-     }
-
-     // Garante que o ponto final exista no mapa de waypoints
-     if(!waypointMap[endId]){
-        console.error("Waypoint final não encontrado:", endId);
+    if (!currentMap[startId] || distances[startId] === undefined) {
+        console.error("Waypoint inicial inválido ou não pertence ao andar atual:", startId);
+        routingError.value = "Ponto de partida inválido para roteamento.";
         return null;
-     }
-
+    }
+     if (!currentMap[endId] || distances[endId] === undefined) {
+        console.error("Waypoint final inválido ou não pertence ao andar atual:", endId);
+        routingError.value = "Ponto de destino inválido para roteamento.";
+        return null;
+    }
 
     while (unvisited.size > 0) {
-      // Encontrar nó não visitado com menor distância
       let currentId = null;
       let smallestDistance = Infinity;
       for (const nodeId of unvisited) {
@@ -84,115 +99,102 @@ export function useMapRouting(userPosition, selectedLocal, currentFloor, mapScal
         }
       }
 
-      // Se não encontrou (inalcançável) ou chegou ao destino
-      if (currentId === null || currentId === endId) break;
+      if (currentId === null || currentId === endId || smallestDistance === Infinity) break;
 
       unvisited.delete(currentId);
-      const currentWaypoint = waypointMap[currentId];
+      const currentWaypoint = currentMap[currentId];
 
-      // Se currentWaypoint for indefinido, algo está errado
-      if (!currentWaypoint) {
-          console.error("Waypoint atual inválido no Dijkstra:", currentId);
-          continue; // Pula para a próxima iteração
+      if (!currentWaypoint || !currentWaypoint.connections) {
+         console.warn(`Waypoint ${currentId} sem conexões ou inválido.`);
+         continue;
       }
-
 
       // Iterar sobre vizinhos (conexões)
-      if (currentWaypoint.connections) {
-        for (const neighborId of currentWaypoint.connections) {
-          const neighbor = waypointMap[neighborId];
+      for (const neighborId of currentWaypoint.connections) {
+        const neighbor = currentMap[neighborId];
 
-          // Pula se o vizinho não existe ou não está no andar (simplificação para rota no mesmo andar)
-          if (!neighbor || neighbor.andar !== currentFloor.value) continue;
+        // Considera apenas vizinhos NO MESMO ANDAR (limitação atual)
+        if (!neighbor || neighbor.andar !== currentFloor.value) continue;
 
-          // Calcula distância euclidiana entre waypoints
-          const dx = currentWaypoint.x - neighbor.x;
-          const dy = currentWaypoint.y - neighbor.y;
-          const distance = Math.sqrt(dx * dx + dy * dy); // Distância percentual
+        // Calcula distância euclidiana
+        const dx = currentWaypoint.x - neighbor.x;
+        const dy = currentWaypoint.y - neighbor.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const totalDistance = distances[currentId] + distance;
 
-          const totalDistance = distances[currentId] + distance;
-
-          if (totalDistance < distances[neighborId]) {
-            distances[neighborId] = totalDistance;
-            previous[neighborId] = currentId;
-          }
+        if (totalDistance < distances[neighborId]) {
+          distances[neighborId] = totalDistance;
+          previous[neighborId] = currentId;
         }
-      } else {
-           console.warn(`Waypoint ${currentId} não possui conexões definidas.`);
       }
-
     } // Fim do while
 
     // Reconstruir caminho
     const path = [];
     let current = endId;
-    // Verifica se o destino foi alcançado (previous[endId] não será null se um caminho foi encontrado)
-    // Ou se o início e fim são o mesmo waypoint
+    // Verifica se o destino foi alcançado
     if (previous[endId] !== undefined || startId === endId) {
-        while (current !== null && current !== undefined) {
-            // Adiciona ao início do array
-            if(waypointMap[current]){
-               path.unshift(waypointMap[current]);
-            } else {
-               console.error("Waypoint inválido durante reconstrução do caminho:", current);
-               break; // Interrompe se encontrar waypoint inválido
-            }
-            // Verifica se existe um nó anterior antes de acessá-lo
-            if (previous[current] !== undefined) {
-               current = previous[current];
-            } else {
-               // Chegou ao início ou houve um erro
-               break;
+        while (current !== null && current !== undefined && currentMap[current]) {
+            path.unshift(currentMap[current]);
+            if (current === startId) break; // Chegou ao início
+            current = previous[current];
+            if (path.length > currentFloorWaypoints.value.length) { // Safety break
+                 console.error("Erro na reconstrução do caminho - loop infinito?");
+                 return null;
             }
         }
     }
 
-
-    // Retorna o caminho se ele começar no waypoint inicial esperado, senão retorna null
-    return path.length > 0 && path[0]?.id === startId ? path : null;
+     // Verifica se o caminho reconstruído começa com o startId correto
+    if (path.length > 0 && path[0]?.id === startId) {
+        return path;
+    } else if (startId === endId && currentMap[startId]) {
+         return [currentMap[startId]]; // Caminho de um ponto só
+    } else {
+        console.warn("Não foi possível reconstruir um caminho válido de", startId, "para", endId);
+        return null; // Caminho não encontrado ou inválido
+    }
   };
 
   /** Cria um segmento de rota (linha) entre dois pontos */
   const createRouteSegment = (x1, y1, x2, y2) => {
-      // Precisa das dimensões do mapa em pixels para calcular length/angle corretamente
-      const baseWidth = mapDimensions.value?.width || 1; // Evita divisão por zero
-      const baseHeight = mapDimensions.value?.height || 1;
+    const baseWidth = mapDimensions.value?.width || 1;
+    const baseHeight = mapDimensions.value?.height || 1;
+    if (baseWidth <= 1 || baseHeight <= 1) {
+        console.warn("Dimensões do mapa inválidas para criar segmento:", mapDimensions.value);
+        return; // Não cria segmento se dimensões não forem válidas
+    }
 
-      const dxPercent = x2 - x1;
-      const dyPercent = y2 - y1;
+    const dxPercent = x2 - x1;
+    const dyPercent = y2 - y1;
+    const pixelDx = (dxPercent / 100) * baseWidth;
+    const pixelDy = (dyPercent / 100) * baseHeight;
+    const length = Math.sqrt(pixelDx * pixelDx + pixelDy * pixelDy);
+    const angle = Math.atan2(pixelDy, pixelDx) * (180 / Math.PI);
 
-      // Converte delta percentual para delta em pixels
-      const pixelDx = (dxPercent / 100) * baseWidth;
-      const pixelDy = (dyPercent / 100) * baseHeight;
+    // Evita segmentos de comprimento zero ou NaN
+    if (isNaN(length) || length < 0.1) {
+        return;
+    }
 
-      // Calcula comprimento em pixels e ângulo
-      // O comprimento precisa considerar a escala atual do mapa
-      const length = Math.sqrt(pixelDx * pixelDx + pixelDy * pixelDy); // * mapScale.value; // O scale é aplicado no CSS/transform
-      const angle = Math.atan2(pixelDy, pixelDx) * (180 / Math.PI);
 
-      routeSegments.value.push({
-          x: x1,         // Posição X inicial do segmento (%)
-          y: y1,         // Posição Y inicial do segmento (%)
-          length: length,  // Comprimento do segmento em pixels (sem escala)
-          angle: angle,    // Ângulo do segmento em graus
-      });
+    routeSegments.value.push({ x: x1, y: y1, length: length, angle: angle });
   };
 
-    /** Cria uma rota como uma linha reta simples (fallback) */
-    const createSimpleRouteLine = (startPos, endPos) => {
-        routeSegments.value = []; // Limpa segmentos anteriores
-        if (!startPos || !endPos) {
-            hasRoute.value = false;
-            return;
-        }
-        createRouteSegment(startPos.x, startPos.y, endPos.x, endPos.y);
-        hasRoute.value = routeSegments.value.length > 0;
-        routingError.value = "Não foi possível calcular a rota detalhada. Mostrando linha reta."; // Informa o fallback
-    };
+  /** Cria uma rota como uma linha reta simples (fallback) */
+  const createSimpleRouteLine = (startPos, endPos) => {
+    routeSegments.value = []; // Limpa segmentos anteriores
+    if (!startPos || !endPos) {
+      hasRoute.value = false;
+      return;
+    }
+    createRouteSegment(startPos.x, startPos.y, endPos.x, endPos.y);
+    hasRoute.value = routeSegments.value.length > 0;
+    routingError.value = "Não foi possível calcular a rota detalhada. Mostrando linha reta.";
+  };
 
 
   // --- Função Principal de Criação de Rota ---
-
   const calculateRoute = () => {
     routeSegments.value = []; // Limpa rota anterior
     hasRoute.value = false;
@@ -201,47 +203,65 @@ export function useMapRouting(userPosition, selectedLocal, currentFloor, mapScal
 
     const startPos = userPosition.value;
     const endLocal = selectedLocal.value;
+    const floorId = currentFloor.value;
+    const waypointsDisponiveis = currentFloorWaypoints.value;
 
     // Condições para calcular a rota
-    if (!startPos || !endLocal || endLocal.andar !== currentFloor.value) {
-      return; // Sai se não houver usuário, destino ou se estiverem em andares diferentes
+    if (!startPos || !endLocal) {
+      console.log("Cálculo de rota abortado: Posição inicial ou local final ausente.");
+      return; // Sai se não houver usuário ou destino
     }
+    if (endLocal.andar !== floorId) {
+        console.log(`Cálculo de rota abortado: Destino (${endLocal.andar}) não está no andar atual (${floorId}).`);
+        // Limpa rota existente se o usuário mudou de andar mas o destino ficou selecionado
+        return;
+    }
+     if (waypointsDisponiveis.length === 0) {
+         console.warn("Cálculo de rota abortado: Nenhum waypoint disponível para o andar", floorId);
+         routingError.value = `Nenhum waypoint encontrado para o andar ${floorId}. Impossível rotear.`;
+         return;
+     }
+
 
     // 1. Encontrar waypoints mais próximos
-    const startWaypoint = findNearestWaypoint(startPos.x, startPos.y, currentFloor.value);
-    const endWaypoint = findNearestWaypoint(endLocal.x, endLocal.y, currentFloor.value);
+    const startWaypoint = findNearestWaypoint(startPos.x, startPos.y, floorId);
+    const endWaypoint = findNearestWaypoint(endLocal.x, endLocal.y, floorId);
 
     if (!startWaypoint || !endWaypoint) {
-      console.warn("Não foi possível encontrar waypoints próximos para o início ou fim. Usando linha reta.");
+      console.warn("Não foi possível encontrar waypoints próximos para o início ou fim no andar", floorId);
       routingError.value = "Waypoints próximos não encontrados.";
-      createSimpleRouteLine(startPos, endLocal);
+      createSimpleRouteLine(startPos, endLocal); // Fallback para linha reta
       return;
     }
 
-    // Adiciona waypoints de início e fim para depuração visual
-     debugWaypoints.value.push({ id: 'debug_start_wp', ...startWaypoint });
-     debugWaypoints.value.push({ id: 'debug_end_wp', ...endWaypoint });
-
+    console.log("Waypoint inicial mais próximo:", startWaypoint.id);
+    console.log("Waypoint final mais próximo:", endWaypoint.id);
+    debugWaypoints.value.push({ id: 'debug_start_wp', ...startWaypoint });
+    debugWaypoints.value.push({ id: 'debug_end_wp', ...endWaypoint });
 
     // 2. Encontrar caminho mais curto entre waypoints
     let path = null;
     if (startWaypoint.id === endWaypoint.id) {
-        // Se o waypoint mais próximo for o mesmo, a rota é direta
-        path = [startWaypoint]; // Caminho contém apenas um waypoint
+      path = [startWaypoint]; // Caminho contém apenas um waypoint
+      console.log("Waypoints inicial e final são os mesmos.");
     } else {
-        path = findShortestPath(startWaypoint.id, endWaypoint.id);
+      path = findShortestPath(startWaypoint.id, endWaypoint.id);
+      console.log("Caminho encontrado:", path?.map(p => p.id));
     }
-
 
     if (!path || path.length === 0) {
-        console.warn(`Não foi possível encontrar um caminho entre ${startWaypoint.id} e ${endWaypoint.id}. Usando linha reta.`);
-        routingError.value = "Não foi possível calcular a rota entre os pontos.";
-        createSimpleRouteLine(startPos, endLocal);
-        return;
+      console.warn(`Não foi possível encontrar um caminho entre ${startWaypoint.id} e ${endWaypoint.id}. Usando linha reta.`);
+      routingError.value = "Não foi possível calcular a rota entre os pontos.";
+      createSimpleRouteLine(startPos, endLocal); // Fallback
+      return;
     }
 
-     // Adiciona os waypoints do caminho para depuração visual
-     path.forEach(wp => debugWaypoints.value.push({ id: `debug_path_${wp.id}`, ...wp }));
+    // Adiciona os waypoints do caminho para depuração visual (exceto start/end já adicionados)
+    path.forEach(wp => {
+        if (wp.id !== startWaypoint.id && wp.id !== endWaypoint.id) {
+            debugWaypoints.value.push({ id: `debug_path_${wp.id}`, ...wp })
+        }
+    });
 
 
     // 3. Criar segmentos da rota
@@ -254,29 +274,38 @@ export function useMapRouting(userPosition, selectedLocal, currentFloor, mapScal
     }
 
     // Segmento: Último Waypoint do Caminho -> Destino Final (Local)
-    createRouteSegment(path[path.length - 1].x, path[path.length - 1].y, endLocal.x, endLocal.y);
+    // Garante que path[path.length - 1] existe antes de acessar
+     if (path.length > 0) {
+        createRouteSegment(path[path.length - 1].x, path[path.length - 1].y, endLocal.x, endLocal.y);
+     } else {
+         // Se o path era apenas o startWaypoint, conecta direto ao endLocal
+         createRouteSegment(startWaypoint.x, startWaypoint.y, endLocal.x, endLocal.y);
+     }
+
 
     hasRoute.value = routeSegments.value.length > 0;
-    if(!hasRoute.value) {
-        routingError.value = "Falha ao gerar segmentos da rota.";
+    if(!hasRoute.value && !routingError.value) { // Só define erro se não houve outro erro antes
+      routingError.value = "Falha ao gerar segmentos da rota.";
+    } else if (hasRoute.value) {
+        routingError.value = null; // Limpa erro se a rota foi gerada com sucesso
     }
+     console.log("Segmentos da rota calculados:", routeSegments.value.length);
   };
 
   // --- Observador ---
-  // Recalcula a rota quando a posição do usuário, o local selecionado ou o andar mudam
+  // Recalcula a rota quando algo relevante muda
   watch(
-    [userPosition, selectedLocal, currentFloor, mapDimensions], // mapScale afeta apenas a exibição, não o cálculo
+    [userPosition, selectedLocal, currentFloor, mapDimensions, waypointsDataRef], // Adiciona waypointsDataRef
     calculateRoute,
-    { deep: true, immediate: false } // `immediate: false` para esperar dados iniciais
-                                     // `deep: true` para observar mudanças dentro de userPosition/selectedLocal
+    { deep: true, immediate: false } // Roda após a montagem inicial e dados carregados
   );
 
   // --- Retorno ---
   return {
-    routeSegments,  // ref(Array)
-    hasRoute,       // ref(boolean)
-    debugWaypoints, // ref(Array) - Para visualizar no mapa
-    routingError,   // ref(string | null)
-    calculateRoute, // function - Pode ser chamada manualmente se necessário
+    routeSegments,
+    hasRoute,
+    debugWaypoints,
+    routingError,
+    calculateRoute, // Permite chamar manualmente
   };
 }
