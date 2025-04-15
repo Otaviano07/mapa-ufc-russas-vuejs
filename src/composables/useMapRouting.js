@@ -1,4 +1,3 @@
-// src/composables/useMapRouting.js
 import { ref, watch, computed } from 'vue';
 // Não importa mais getWaypoints daqui
 

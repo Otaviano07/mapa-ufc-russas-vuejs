@@ -1,4 +1,3 @@
-// src/services/LocationService.js
 import { ref } from 'vue';
 
 // --- Configuração da API ---
@@ -111,22 +110,34 @@ async function callApi(params = {}, method = 'GET') {
   }
 }
 
-// --- Funções Exportadas ---
+export const fetchWaypoints = async () => {
+  const result = await callApi({ action: 'readWaypoints' }, 'GET');
+  if (result && result.waypoints && Array.isArray(result.waypoints)) {
+    console.log(result.waypoints);
+    return result.waypoints;
+  } else {
+    console.error("Dados inválidos ao buscar waypoints:", result);
+    return null;
+  }
+};
 
 /**
  * Busca todos os dados iniciais necessários para o mapa.
  * @returns {Promise<{locais: Array, waypoints: Array, floors: Array}|null>}
  */
 export const fetchInitialData = async () => {
-  // Assume que GET sem 'action' ou com 'action=readAll' retorna tudo
-  const result = await callApi({ action: 'readAll' }, 'GET'); // Ou apenas callApi()
+  const result = await callApi({ action: 'readAll' }, 'GET');
 
-  if (result && result.status === 'success') {
+  // Log da resposta da API
+  console.log("Resposta da API (fetchInitialData):", result);
+
+  // Modifique a validação para verificar apenas o array de locais
+  if (result && Array.isArray(result.locais)) {
     const locais = result.locais || [];
     const waypoints = result.waypoints || [];
     const floors = result.floors || [];
 
-    if (!Array.isArray(locais) || !Array.isArray(waypoints) || !Array.isArray(floors)) {
+    if (!Array.isArray(waypoints) || !Array.isArray(floors)) {
       console.error("Formato de dados inesperado em fetchInitialData:", result);
       error.value = "Formato de dados inválido da API.";
       return null;
@@ -134,7 +145,7 @@ export const fetchInitialData = async () => {
     console.log("Dados iniciais carregados via API.");
     return { locais, waypoints, floors };
   } else {
-    // Erro já tratado em callApi e armazenado em error.value
+    console.error("Dados inválidos em fetchInitialData:", result);
     return null;
   }
 };
@@ -144,20 +155,22 @@ export const fetchInitialData = async () => {
  * @returns {Promise<Array|null>}
  */
 export const fetchAdminLocations = async () => {
-    // Assume que action=read retorna apenas locais, como no LocationAdmin original
-    const result = await callApi({ action: 'read' }, 'GET');
-    if (result && result.status === 'success') {
-        const locais = result.locais || [];
-        if (!Array.isArray(locais)) {
-            console.error("Formato de locais inesperado em fetchAdminLocations:", result);
-            error.value = "Formato de locais inválido da API.";
-            return null;
-        }
-        return locais;
-    } else {
-        return null;
+  const result = await callApi({ action: 'read' }, 'GET');
+
+  // Adicione a validação aqui
+  if (result && result.status === 'success' && Array.isArray(result.locais)) {
+    const locais = result.locais || [];
+    if (!Array.isArray(locais)) {
+      console.error("Formato de locais inesperado em fetchAdminLocations:", result);
+      error.value = "Formato de locais inválido da API.";
+      return null;
     }
-}
+    return locais;
+  } else {
+    console.error("Dados inválidos em fetchAdminLocations:", result);
+    return null;
+  }
+};
 
 
 /**
