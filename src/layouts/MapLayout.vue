@@ -1,6 +1,9 @@
 <template>
     <div class="app-container">
       <button class="menu-toggle-button" @click="toggleMenu" title="Abrir/Fechar Menu">☰</button>
+      <nav class="top-nav">
+        <router-link to="/admin" class="nav-link">Admin</router-link>
+      </nav>
   
       <AppSidebar
         :is-open="isMenuOpen"
@@ -13,39 +16,41 @@
         @close="closeMenu" />
   
       <div class="main-content" style="flex-grow: 1; position: relative;">
-        <MapDisplay
-          :map-image-url="currentFloorMap"
-          :locais-on-floor="locaisAtualAndar"
-          :user-position="userPosition"
-          :route-segments="routeSegments"
-          :debug-waypoints="debugWaypoints" :selected-local-id="selectedLocal?.id"
-          :popup-info="popupInfo"
-          :map-scale="mapScale"
-          :loading="loading.map" @map-click="handleMapClick"
-          @marker-click="handleLocalSelect"
-          @marker-mouseenter="showPopup"
-          @marker-mouseleave="hidePopup"
-          @update:map-dimensions="mapDimensions = $event" />
-  
-        <MapControls
-          @zoom-in="zoomIn"
-          @zoom-out="zoomOut"
-          @update-location="triggerAutoLocation"
-          @set-location-manual="triggerManualLocationMode" />
-  
-        <div v-if="overallLoading && !displayError" class="loading">
-             <span v-if="loading.initialData">Carregando dados do mapa...</span>
-             <span v-else-if="isGettingLocation">Obtendo localização...</span>
-             <span v-else>Carregando...</span>
-         </div>
-  
-  
-        <div v-if="displayError" class="error">{{ displayError }}</div>
-  
-        <div v-if="settingUserLocationMode" class="manual-location-prompt">
-           {{ manualModeMessage }}
-        </div>
-  
+        <template v-if="$route.name === 'MapHome'">
+          <MapDisplay
+            :map-image-url="currentFloorMap"
+            :locais-on-floor="locaisAtualAndar"
+            :user-position="userPosition"
+            :route-segments="routeSegments"
+            :debug-waypoints="debugWaypoints" :selected-local-id="selectedLocal?.id"
+            :popup-info="popupInfo"
+            :map-scale="mapScale"
+            :current-floor="currentFloorId"
+            :loading="loading.map" @map-click="handleMapClick"
+            @marker-click="handleLocalSelect"
+            @marker-mouseenter="showPopup"
+            @marker-mouseleave="hidePopup"
+            @update:map-dimensions="mapDimensions = $event" />
+    
+          <MapControls
+            @zoom-in="zoomIn"
+            @zoom-out="zoomOut"
+            @update-location="triggerAutoLocation"
+            @set-location-manual="triggerManualLocationMode" />
+    
+          <div v-if="overallLoading && !displayError" class="loading">
+               <span v-if="loading.initialData">Carregando dados do mapa...</span>
+               <span v-else-if="isGettingLocation">Obtendo localização...</span>
+               <span v-else>Carregando...</span>
+           </div>
+    
+          <div v-if="displayError" class="error">{{ displayError }}</div>
+    
+          <div v-if="settingUserLocationMode" class="manual-location-prompt">
+             {{ manualModeMessage }}
+          </div>
+        </template>
+        
         <router-view />
       </div>
     </div>
@@ -117,7 +122,14 @@
   // --- Dados Computados ---
   const currentFloorData = computed(() => floors.value.find(f => f.id === currentFloorId.value));
   const currentFloorMap = computed(() => currentFloorData.value?.image || '');
-  const locaisAtualAndar = computed(() => allLocais.value.filter(local => local.andar === currentFloorId.value));
+  const locaisAtualAndar = computed(() => {
+    console.log('Todos os locais:', allLocais.value);
+    console.log('Andar atual:', currentFloorId.value);
+    const locaisFiltrados = allLocais.value.filter(local => local.andar === currentFloorId.value);
+    console.log('Locais filtrados:', locaisFiltrados);
+    return locaisFiltrados;
+  });
+
   const overallLoading = computed(() => loading.value.initialData || isGettingLocation.value);
   // Combina erros para exibição principal (pode priorizar)
   const displayError = computed(() =>
@@ -144,16 +156,24 @@
         floors.value = initialData.floors;
         waypoints.value = initialData.waypoints; // Atualiza o ref de waypoints
   
-        // Define andar padrão se necessário (após carregar andares)
-        if (floors.value.length > 0 && !floors.value.some(f => f.id === currentFloorId.value)) {
-          currentFloorId.value = floors.value[0].id;
+        // Se não houver andares, cria um andar padrão
+        if (floors.value.length === 0) {
+          console.log("Criando andar padrão 'terreo'");
+          floors.value = [{ id: 'terreo', nome: 'Térreo' }];
         }
-         // Verifica se há locais, andares ou waypoints
-          if (allLocais.value.length === 0) console.warn("Nenhum local carregado da API.");
-          if (floors.value.length === 0) console.warn("Nenhum andar carregado da API.");
-          if (waypoints.value.length === 0) console.warn("Nenhum waypoint carregado da API.");
-  
-  
+
+        // Define andar padrão se necessário
+        if (!currentFloorId.value || !floors.value.some(f => f.id === currentFloorId.value)) {
+          currentFloorId.value = floors.value[0].id;
+          console.log("Definindo andar padrão:", currentFloorId.value);
+        }
+
+        // Log de status
+        console.log(`Status dos dados:
+          - Locais: ${allLocais.value.length}
+          - Andares: ${floors.value.length}
+          - Waypoints: ${waypoints.value.length}
+          - Andar atual: ${currentFloorId.value}`);
       } else {
           // Erro já deve estar em locationServiceState.error ou error.value do serviço
           error.value.initialData = locationServiceState.error.value || "Falha ao carregar dados iniciais.";
@@ -191,13 +211,15 @@
   };
   
   // Função chamada pelo MapDisplay quando o mapa é clicado
-  const handleMapClick = (event, mapRect) => {
+  const handleMapClick = (event) => {
+    const mapElement = document.getElementById('map-container');
+    
     // Passa para o composable de interação, fornecendo callbacks
     handleMapClickInteraction(
       event,
-      mapRect,
+      mapElement,
       (xPercent, yPercent) => { // Callback para definir localização manual
-        setUserLocationManually (xPercent, yPercent);
+        setUserLocationManually(xPercent, yPercent);
         error.value.geolocation = null; // Limpa msg de erro de geo
         manualModeMessage.value = ''; // Limpa msg de modo manual
       },
@@ -208,12 +230,12 @@
         }
       }
     );
-  
-    // Se NÃO estiver no modo de definir localização, um clique no mapa deseleciona o local?
-     if (!settingUserLocationMode.value) {
-         selectedLocal.value = null;
-         hidePopup();
-     }
+
+    // Se NÃO estiver no modo de definir localização, um clique no mapa deseleciona o local
+    if (!settingUserLocationMode.value) {
+      selectedLocal.value = null;
+      hidePopup();
+    }
   };
   
   // Inicia a busca automática de localização (acionado pelo botão)
@@ -270,66 +292,91 @@
   // --- Ciclo de Vida ---
   onMounted(() => {
     loadInitialData(); // Carrega locais, waypoints, andares da API
-    getUserLocationAuto(); // Tenta obter localização ao iniciar
   });
-  
-  </script>
-  
-  <style scoped>
-  /* Estilos específicos para o layout, se necessário */
-  .main-content {
-    width: 100%;
-    height: 100vh;
-  }
-  
-  /* Ajuste para sobrepor o erro/loading global se necessário */
-  .error, .loading {
-    z-index: 1100; /* Acima de outros elementos */
-  }
-  
-  /* Estilo para a mensagem do modo manual */
-  .manual-location-prompt {
-      position: absolute;
-      top: 10%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: lightblue;
-      color: black;
-      border: 1px solid blue;
-      padding: 10px 15px;
-      border-radius: 5px;
-      z-index: 1100;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      font-weight: bold;
-      text-align: center;
-  }
-  
-  /* Estilos para o botão de toggle (pode estar em main.css) */
-  .menu-toggle-button {
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    z-index: 1001; /* Acima de tudo */
-    background-color: var(--button-bg-color, #f0f0f0);
-    color: var(--text-color, #333);
-    border: 1px solid var(--border-color, #ccc);
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 1.5em;
-    cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    transition: background-color 0.2s ease;
-  }
-  .menu-toggle-button:hover {
-    background-color: var(--button-hover-bg-color, #e0e0e0);
-  }
-  
-  /* Container principal (pode estar em main.css) */
-  .app-container {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
-  }
-  </style>
+</script>
+
+<style scoped>
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100vh;
+}
+
+.error, .loading {
+  z-index: 1100;
+}
+
+.manual-location-prompt {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: lightblue;
+  color: black;
+  border: 1px solid blue;
+  padding: 10px 15px;
+  border-radius: 5px;
+  z-index: 1100;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  font-weight: bold;
+  text-align: center;
+}
+
+.top-nav {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0 0 0 8px;
+  padding: 10px;
+}
+
+.nav-link {
+  padding: 0.5rem 1rem;
+  margin: 0 10px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  text-decoration: none;
+  color: #333;
+  transition: background-color 0.3s;
+}
+
+.nav-link:hover {
+  background: #f8f8f8;
+}
+
+.nav-link.router-link-active {
+  background-color: #007bff;
+  color: white;
+}
+
+.menu-toggle-button {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.5em;
+}
+
+.menu-toggle-button:hover {
+  background: #f8f8f8;
+}
+</style>

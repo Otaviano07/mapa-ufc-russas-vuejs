@@ -55,58 +55,123 @@ const handleSelectLocal = (local) => {
 
 <template>
     <div class="sidebar" :class="{ 'is-open': isOpen }">
-        <h1>Local</h1>
+        <h1>Locais</h1>
 
         <div class="floor-selector">
             <select v-model="internalCurrentFloor" @change="changeFloor">
                 <option v-for="floor in floors" :key="floor.id" :value="floor.id">
-                    {{ floor.name }}
+                    {{ floor.nome }}
                 </option>
             </select>
         </div>
 
-        <input v-model="searchTerm" class="search-box" placeholder="Buscar local..." />
+        <div class="search-container">
+            <input v-model="searchTerm" class="search-box" placeholder="Buscar local..." />
+        </div>
 
-        <div v-if="error" class="error" style="position: static; transform: none; margin-bottom: 10px;">
+        <div v-if="error" class="error">
             {{ error }}
         </div>
 
-        <div v-if="loading && !allLocais.length">Carregando locais...</div>
+        <div v-if="loading && !allLocais.length" class="status-message">Carregando locais...</div>
 
-        <div v-if="!loading && !filteredLocais.length && searchTerm">Nenhum local encontrado para "{{ searchTerm }}".
+        <div v-if="!loading && !filteredLocais.length && searchTerm" class="status-message">
+            Nenhum local encontrado para "{{ searchTerm }}".
         </div>
-        <div v-if="!loading && !filteredLocais.length && !searchTerm">Nenhum local neste andar.</div>
+        <div v-if="!loading && !filteredLocais.length && !searchTerm" class="status-message">
+            Nenhum local neste andar.
+        </div>
 
-
-        <LocationItem v-for="local in filteredLocais" :key="local.id" :local="local"
-            :isSelected="selectedLocalId === local.id" @select="handleSelectLocal" />
+        <div class="locations-list">
+            <div
+                v-for="local in filteredLocais"
+                :key="local.id"
+                class="location-item"
+                :class="{ 'selected': selectedLocalId === local.id }"
+                @click="handleSelectLocal(local)"
+            >
+                {{ local.nome }}
+            </div>
+        </div>
 
     </div>
 </template>
 
 <style scoped>
-/* Estilos específicos da sidebar já estão em main.css */
-/* Se precisar de algo MUITO específico, adicione aqui 
 .sidebar {
-    /* Herdado de main.css 
+    width: 300px;
+    height: 100vh;
+    background: white;
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    padding: 20px;
 }
 
 .sidebar.is-open {
-    /* Herdado de main.css 
-}*/
+    transform: translateX(0);
+}
 
-/* Ajuste para erro dentro da sidebar */
-.error {
-    position: static;
-    /* Sobrescreve o absoluto do global */
-    transform: none;
+.floor-selector select {
+    width: 100%;
+    padding: 8px;
     margin-bottom: 15px;
-    width: auto;
-    /* Garante que não fique gigante */
-    left: auto;
-    top: auto;
-    text-align: left;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+}
+
+.search-container {
+    margin-bottom: 15px;
+}
+
+.search-box {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.locations-list {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+.location-item {
     padding: 10px;
-    /* Menor padding */
+    margin: 5px 0;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.location-item:hover {
+    background: #e9ecef;
+}
+
+.location-item.selected {
+    background: #007bff;
+    color: white;
+    border-color: #0056b3;
+}
+
+.error {
+    color: #dc3545;
+    padding: 10px;
+    margin-bottom: 15px;
+    background: #f8d7da;
+    border-radius: 4px;
+}
+
+.status-message {
+    padding: 10px;
+    color: #6c757d;
+    text-align: center;
 }
 </style>

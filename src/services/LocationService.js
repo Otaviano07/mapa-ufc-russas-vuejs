@@ -1,4 +1,19 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
+
+// Cache de dados
+const dataCache = {
+  locations: shallowRef(null),
+  waypoints: shallowRef(null),
+  floors: shallowRef(null),
+  lastFetch: {
+    locations: 0,
+    waypoints: 0,
+    floors: 0
+  }
+};
+
+// Tempo de cache em millisegundos (5 minutos)
+const CACHE_DURATION = 5 * 60 * 1000;
 
 // --- Configuração da API ---
 const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
@@ -35,40 +50,36 @@ async function callApi(params = {}, method = 'GET') {
   }
 
   loading.value = true;
-  error.value = null; // Limpa erro anterior
-  // Não limpa successMessage aqui, pois pode ser de uma operação anterior bem-sucedida
+  error.value = null;
 
-  let url = API_URL;
-  let options = {
-    method: method,
-    mode: 'cors', // Necessário para requisições cross-origin
-    headers: {},
+  const queryParams = new URLSearchParams(params);
+  const url = `${API_URL}${params ? `?${queryParams.toString()}` : ''}`;
+
+  const options = {
+    method,
+    mode: 'cors',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    redirect: 'follow',
   };
 
-  const queryParams = new URLSearchParams();
-  for (const key in params) {
-    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
-      queryParams.append(key, params[key]);
-    }
-  }
-
-  if (method === 'GET' || method === 'DELETE') { // DELETE também pode usar query params
-    url += `?${queryParams.toString()}`;
-  } else if (method === 'POST' || method === 'PUT') {
-    // Exemplo: enviando como form data (comum com Apps Script doGet/doPost simples)
-    // Se o Apps Script espera JSON, use JSON.stringify e 'application/json' header
-    options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  if (method === 'POST') {
     options.body = queryParams.toString();
-    // Precisa adicionar a action na URL também se o doPost a ler de lá
-    const actionParam = params.action ? `?action=${encodeURIComponent(params.action)}` : '';
-     url += actionParam;
   }
 
-  console.log(`Chamando API (${params.action || 'N/A'}) | Método: ${method} | URL:`, url);
+  console.log(`Chamando API (${params.action || 'N/A'}) | Método: ${method}`);
+  console.log('URL:', url);
   if (options.body) console.log("Body:", options.body);
 
   try {
     const response = await fetch(url, options);
+
+    console.log('API Response status:', response.status);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
     let result;
     const contentType = response.headers.get("content-type");
@@ -78,10 +89,10 @@ async function callApi(params = {}, method = 'GET') {
     } else {
       const textResponse = await response.text();
       console.warn(`Resposta da API não é JSON (Content-Type: ${contentType}). Texto:`, textResponse.substring(0, 500));
-       if (response.status === 302 || textResponse.toLowerCase().includes('<title>autorização necessária</title>') || textResponse.toLowerCase().includes('required permissions')) {
-           throw new Error(`Falha na API: Possível erro de permissão ou URL /dev inválida. Verifique permissões da Web App e use a URL /exec.`);
-       }
-       throw new Error(`Resposta inesperada (não-JSON): Status ${response.status}. Resposta: ${textResponse.substring(0, 150)}...`);
+      if (response.status === 302 || textResponse.toLowerCase().includes('<title>autorização necessária</title>') || textResponse.toLowerCase().includes('required permissions')) {
+        throw new Error(`Falha na API: Possível erro de permissão ou URL /dev inválida. Verifique permissões da Web App e use a URL /exec.`);
+      }
+      throw new Error(`Resposta inesperada (não-JSON): Status ${response.status}. Resposta: ${textResponse.substring(0, 150)}...`);
     }
 
     console.log("Resposta da API:", result);
@@ -91,11 +102,10 @@ async function callApi(params = {}, method = 'GET') {
       throw new Error(errorMessage);
     }
 
-    // Define mensagem de sucesso apenas para operações CRUD que não sejam de leitura
-    const readActions = ['read', 'readAll', 'readLocais', 'readWaypoints', 'readFloors']; // Adicione outras ações de leitura se houver
+    const readActions = ['read', 'readAll', 'readLocais', 'readWaypoints', 'readFloors'];
     if (params.action && !readActions.includes(params.action)) {
-        successMessage.value = result.message || 'Operação realizada com sucesso!';
-        clearMessages(); // Limpa a msg de sucesso após um tempo
+      successMessage.value = result.message || 'Operação realizada com sucesso!';
+      clearMessages();
     }
 
     return result;
@@ -103,52 +113,93 @@ async function callApi(params = {}, method = 'GET') {
   } catch (err) {
     console.error(`Erro na API action=${params.action || 'N/A'}, method=${method}:`, err);
     error.value = `Falha na operação (${params.action || 'leitura'}): ${err.message}`;
-    // Não limpa a msg de erro automaticamente aqui, deixa o componente decidir
+    successMessage.value = null;
     return null;
   } finally {
     loading.value = false;
   }
 }
 
-export const fetchWaypoints = async () => {
-  const result = await callApi({ action: 'readWaypoints' }, 'GET');
-  if (result && result.waypoints && Array.isArray(result.waypoints)) {
-    console.log(result.waypoints);
-    return result.waypoints;
-  } else {
-    console.error("Dados inválidos ao buscar waypoints:", result);
+export async function fetchWaypoints(forceRefresh = false) {
+  console.log('Iniciando fetchWaypoints...');
+  try {
+    const now = Date.now();
+
+    if (!forceRefresh &&
+        dataCache.waypoints.value &&
+        (now - dataCache.lastFetch.waypoints <= CACHE_DURATION)) {
+      console.log('Usando cache de waypoints');
+      return dataCache.waypoints.value;
+    }
+
+    const response = await callApi({ action: 'readWaypoints' });
+    if (!response) return null;
+
+    console.log('Resposta de readWaypoints:', response);
+
+    const processedWaypoints = response.waypoints || [];
+    dataCache.waypoints.value = processedWaypoints;
+    dataCache.lastFetch.waypoints = now;
+
+    console.log('Waypoints processados:', processedWaypoints);
+
+    return processedWaypoints;
+  } catch (err) {
+    console.error('Erro ao buscar waypoints:', err);
+    error.value = 'Falha ao carregar waypoints.';
     return null;
   }
-};
+}
 
 /**
  * Busca todos os dados iniciais necessários para o mapa.
  * @returns {Promise<{locais: Array, waypoints: Array, floors: Array}|null>}
  */
-export const fetchInitialData = async () => {
-  const result = await callApi({ action: 'readAll' }, 'GET');
+export async function fetchInitialData(forceRefresh = false) {
+  try {
+    const now = Date.now();
+    let needsRefresh = forceRefresh;
 
-  // Log da resposta da API
-  console.log("Resposta da API (fetchInitialData):", result);
-
-  // Modifique a validação para verificar apenas o array de locais
-  if (result && Array.isArray(result.locais)) {
-    const locais = result.locais || [];
-    const waypoints = result.waypoints || [];
-    const floors = result.floors || [];
-
-    if (!Array.isArray(waypoints) || !Array.isArray(floors)) {
-      console.error("Formato de dados inesperado em fetchInitialData:", result);
-      error.value = "Formato de dados inválido da API.";
-      return null;
+    if (!needsRefresh) {
+      needsRefresh = !dataCache.locations.value ||
+                     !dataCache.waypoints.value ||
+                     !dataCache.floors.value ||
+                     (now - dataCache.lastFetch.locations > CACHE_DURATION) ||
+                     (now - dataCache.lastFetch.waypoints > CACHE_DURATION) ||
+                     (now - dataCache.lastFetch.floors > CACHE_DURATION);
     }
-    console.log("Dados iniciais carregados via API.");
-    return { locais, waypoints, floors };
-  } else {
-    console.error("Dados inválidos em fetchInitialData:", result);
+
+    if (needsRefresh) {
+      const readAllResponse = await callApi({ action: 'readAll' });
+      if (!readAllResponse) return null;
+
+      dataCache.locations.value = readAllResponse.locais || [];
+      dataCache.lastFetch.locations = now;
+
+      await fetchWaypoints();
+      dataCache.lastFetch.waypoints = now;
+
+      dataCache.floors.value = readAllResponse.floors || [];
+      dataCache.lastFetch.floors = now;
+    }
+
+    console.log('Dados processados:');
+    console.log(`- Locais: ${dataCache.locations.value?.length || 0}`);
+    console.log(`- Waypoints: ${dataCache.waypoints.value?.length || 0}`);
+    console.log(`- Exemplo de waypoint:`, dataCache.waypoints.value?.[0] || {});
+    console.log(`- Floors: ${dataCache.floors.value || []}`);
+
+    return {
+      locais: dataCache.locations.value || [],
+      waypoints: dataCache.waypoints.value || [],
+      floors: dataCache.floors.value || [{ id: 'terreo', nome: 'Térreo' }]
+    };
+  } catch (err) {
+    console.error('Erro ao buscar dados iniciais:', err);
+    error.value = 'Erro ao carregar dados iniciais.';
     return null;
   }
-};
+}
 
 /**
  * Busca apenas os locais (para o Admin Panel, por exemplo).
@@ -157,21 +208,14 @@ export const fetchInitialData = async () => {
 export const fetchAdminLocations = async () => {
   const result = await callApi({ action: 'read' }, 'GET');
 
-  // Adicione a validação aqui
-  if (result && result.status === 'success' && Array.isArray(result.locais)) {
-    const locais = result.locais || [];
-    if (!Array.isArray(locais)) {
-      console.error("Formato de locais inesperado em fetchAdminLocations:", result);
-      error.value = "Formato de locais inválido da API.";
-      return null;
-    }
-    return locais;
+  if (result && result.locais && Array.isArray(result.locais)) {
+    return result.locais;
   } else {
     console.error("Dados inválidos em fetchAdminLocations:", result);
-    return null;
+    error.value = "Erro ao carregar locais.";
+    return [];
   }
 };
-
 
 /**
  * Cria um novo local via API.
@@ -179,14 +223,15 @@ export const fetchAdminLocations = async () => {
  * @returns {Promise<boolean>} - True se sucesso, false se falha.
  */
 export const createLocation = async (locationData) => {
-   // Usando POST como exemplo - ajuste o método se seu Apps Script usar GET
   const result = await callApi({
     action: 'create',
+    tipo: locationData.tipo || 'location',
     nome: locationData.nome,
-    endereco: locationData.endereco,
-    andar: locationData.andar
-  }, 'POST'); // Mude para 'GET' se necessário
-  return !!result; // True se a chamada foi bem-sucedida
+    andar: locationData.andar,
+    x: locationData.x,
+    y: locationData.y
+  }, 'POST');
+  return !!result;
 };
 
 /**
@@ -195,18 +240,17 @@ export const createLocation = async (locationData) => {
  * @returns {Promise<boolean>} - True se sucesso, false se falha.
  */
 export const updateLocation = async (locationData) => {
-   // Usando POST como exemplo - ajuste o método se seu Apps Script usar GET
   const params = {
     action: 'update',
     id: locationData.id,
+    ...(locationData.tipo && { tipo: locationData.tipo }),
     ...(locationData.nome && { nome: locationData.nome }),
     ...(locationData.endereco && { endereco: locationData.endereco }),
     ...(locationData.andar && { andar: locationData.andar }),
-    // Adicione x, y se forem editáveis
-    // ...(locationData.x !== undefined && { x: locationData.x }),
-    // ...(locationData.y !== undefined && { y: locationData.y }),
+    ...(locationData.x !== undefined && { x: locationData.x }),
+    ...(locationData.y !== undefined && { y: locationData.y }),
   };
-  const result = await callApi(params, 'POST'); // Mude para 'GET' se necessário
+  const result = await callApi(params, 'POST');
   return !!result;
 };
 
@@ -216,14 +260,16 @@ export const updateLocation = async (locationData) => {
  * @returns {Promise<boolean>} - True se sucesso, false se falha.
  */
 export const deleteLocation = async (id) => {
-  // Usando POST como exemplo - ajuste o método se seu Apps Script usar GET
-  const result = await callApi({ action: 'delete', id: id }, 'POST'); // Mude para 'GET' ou 'DELETE' se necessário
+  const result = await callApi({
+    action: 'delete',
+    id
+  }, 'POST');
   return !!result;
 };
 
 // Exporta os estados reativos para observação externa, se necessário
 export const locationServiceState = {
-    loading,
-    error,
-    successMessage
+  loading,
+  error,
+  successMessage
 };

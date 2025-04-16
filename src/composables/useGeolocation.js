@@ -4,8 +4,8 @@ import { ref } from 'vue';
 // Coordenadas aproximadas do ponto de referência no Campus UFC Russas (Ex: Centro)
 // !!! SUBSTITUIR PELAS COORDENADAS REAIS DO SEU PONTO DE REFERÊNCIA !!!
 const campusReferenceCoordinates = {
-  latitude: -4.9438,  // Exemplo - Latitude do ponto de referência (0,0 no mapa %)
-  longitude: -37.9553, // Exemplo - Longitude do ponto de referência (0,0 no mapa %)
+  latitude: -4.944444,  // Latitude do Campus UFC Russas
+  longitude: -37.955556, // Longitude do Campus UFC Russas
 };
 
 // Dimensões em metros (aproximadas) cobertas pelo mapa a partir do ponto de referência
@@ -14,8 +14,8 @@ const campusReferenceCoordinates = {
 // Se o ponto de referência é o centro (50,50), ajuste a lógica de conversão.
 // Vamos assumir que (0,0) no mapa % corresponde a campusReferenceCoordinates
 const campusDimensions = {
-  widthMeters: 1500,  // Largura total coberta pelo mapa em metros
-  heightMeters: 1200, // Altura total coberta pelo mapa em metros
+  widthMeters: 500,  // Largura aproximada do campus em metros
+  heightMeters: 400, // Altura aproximada do campus em metros
 };
 // --- Fim Configurações ---
 

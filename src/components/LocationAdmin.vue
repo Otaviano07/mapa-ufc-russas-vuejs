@@ -16,16 +16,32 @@
           <input type="text" id="id" :value="formData.id" disabled>
         </div>
         <div class="form-group">
+          <label for="tipo">Tipo:</label>
+          <select id="tipo" v-model="formData.tipo" required>
+            <option v-for="tipo in tiposDisponiveis" :key="tipo" :value="tipo">
+              {{ tipo.charAt(0).toUpperCase() + tipo.slice(1) }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
           <label for="nome">Nome:</label>
           <input type="text" id="nome" v-model="formData.nome" required>
         </div>
         <div class="form-group">
-           <label for="endereco">Endereço/Descrição (para geocodificação no backend, se houver):</label>
-          <input type="text" id="endereco" v-model="formData.endereco" required>
+          <label for="andar">Andar:</label>
+          <select id="andar" v-model="formData.andar" required>
+            <option v-for="andar in andaresDisponiveis" :key="andar" :value="andar">
+              {{ andar.charAt(0).toUpperCase() + andar.slice(1) }}
+            </option>
+          </select>
         </div>
         <div class="form-group">
-          <label for="andar">Andar (ex: terreo, primeiro):</label>
-          <input type="text" id="andar" v-model="formData.andar" required>
+          <label for="x">Coordenada X (0-100):</label>
+          <input type="number" id="x" v-model="formData.x" required step="0.01" min="0" max="100">
+        </div>
+        <div class="form-group">
+          <label for="y">Coordenada Y (0-100):</label>
+          <input type="number" id="y" v-model="formData.y" required step="0.01" min="0" max="100">
         </div>
         <div class="form-actions">
           <button type="submit" :disabled="localLoading" class="btn btn-success">{{ isEditing ? 'Salvar Alterações' : 'Criar Local' }}</button>
@@ -40,11 +56,11 @@
         <thead>
           <tr>
             <th>ID</th>
+            <th>Tipo</th>
             <th>Nome</th>
+            <th>X</th>
+            <th>Y</th>
             <th>Andar</th>
-            <th>Endereço</th>
-            <th>X%</th>
-            <th>Y%</th>
             <th>Ações</th>
           </tr>
         </thead>
@@ -57,11 +73,11 @@
             </tr>
           <tr v-for="loc in locations" :key="loc.id">
             <td>{{ loc.id }}</td>
+            <td>{{ loc.tipo || 'N/A' }}</td>
             <td>{{ loc.nome }}</td>
-            <td>{{ loc.andar }}</td>
-            <td>{{ loc.endereco || 'N/A' }}</td>
-             <td>{{ loc.x?.toFixed ? loc.x.toFixed(2) : loc.x }}</td>
+            <td>{{ loc.x?.toFixed ? loc.x.toFixed(2) : loc.x }}</td>
             <td>{{ loc.y?.toFixed ? loc.y.toFixed(2) : loc.y }}</td>
+            <td>{{ loc.andar }}</td>
             <td>
               <button @click="showEditForm(loc)" :disabled="localLoading || showForm" class="btn btn-warning btn-sm">Editar</button>
               <button @click="confirmDelete(loc.id)" :disabled="localLoading || showForm" class="btn btn-danger btn-sm">Excluir</button>
@@ -74,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 // Importa as funções CRUD do serviço centralizado
 import {
@@ -93,14 +109,81 @@ const localSuccessMessage = ref(null);
 
 const showForm = ref(false);
 const isEditing = ref(false);
+const tiposDisponiveis = [
+  'location',
+  'Waypoints'
+];
+
+const andaresDisponiveis = [
+  'terreo',
+  'primeiro'
+];
+
+// Função para salvar o formulário no localStorage
+const saveFormToStorage = () => {
+  localStorage.setItem('locationFormData', JSON.stringify({
+    ...formData.value,
+    showForm: showForm.value,
+    isEditing: isEditing.value
+  }));
+};
+
+// Função para carregar o formulário do localStorage
+const loadFormFromStorage = () => {
+  const savedData = localStorage.getItem('locationFormData');
+  if (savedData) {
+    const parsed = JSON.parse(savedData);
+    showForm.value = parsed.showForm;
+    isEditing.value = parsed.isEditing;
+    delete parsed.showForm;
+    delete parsed.isEditing;
+    formData.value = parsed;
+  }
+};
+
+// Inicializa o formulário
+// Função para validar e corrigir coordenadas
+const validateCoordinates = (value) => {
+  if (value === null || value === undefined) return 0;
+  const num = parseFloat(value);
+  return Math.max(0, Math.min(100, num));
+};
+
 const formData = ref({
   id: null,
+  tipo: 'location',
   nome: '',
-  endereco: '',
-  andar: '',
-  // x: null, // Descomente se adicionar inputs X/Y
-  // y: null, // Descomente se adicionar inputs X/Y
+  andar: 'terreo',
+  x: null,
+  y: null
 });
+
+const resetForm = () => {
+  formData.value = {
+    id: null,
+    tipo: 'location',
+    nome: '',
+    andar: 'terreo',
+    x: null,
+    y: null
+  };
+  localStorage.removeItem('locationFormData');
+};
+
+// Carrega dados salvos quando o componente é montado
+onMounted(() => {
+  loadLocations();
+  loadFormFromStorage();
+});
+
+// Watch para salvar alterações do formulário
+watch(
+  [formData, showForm, isEditing],
+  () => {
+    saveFormToStorage();
+  },
+  { deep: true }
+);
 
 // Limpa mensagens locais após um tempo
 function clearLocalMessages() {
@@ -117,17 +200,12 @@ async function loadLocations() {
   localError.value = null; // Limpa erro anterior
   locations.value = []; // Limpa locais antes de buscar
   try {
-    const fetchedLocais = await fetchAdminLocations(); // Usa a função do serviço
-    if (fetchedLocais) {
-      locations.value = fetchedLocais;
-    } else {
-       // Se fetchAdminLocations retornar null, o erro já foi setado no serviço,
-       // mas podemos colocar uma msg genérica aqui se quisermos.
-      localError.value = "Não foi possível carregar os locais.";
-    }
-  } catch (err) {
-    console.error("Erro não capturado ao carregar locais:", err);
-    localError.value = `Falha ao carregar dados: ${err.message}`;
+    localLoading.value = true;
+    const result = await fetchAdminLocations();
+    locations.value = result;
+  } catch (error) {
+    localError.value = `Erro ao carregar locais: ${error.message}`;
+    locations.value = [];
   } finally {
     localLoading.value = false;
     if(localError.value) clearLocalMessages(); // Limpa msg de erro tbm
@@ -144,8 +222,8 @@ async function handleAddLocation() {
         nome: formData.value.nome,
         endereco: formData.value.endereco,
         andar: formData.value.andar,
-        // x: formData.value.x, // Envia se for editável
-        // y: formData.value.y, // Envia se for editável
+        x: formData.value.x,
+        y: formData.value.y
      };
     const success = await createLocation(dataToSend); // Usa a função do serviço
     if (success) {
@@ -178,8 +256,8 @@ async function handleUpdateLocation() {
         nome: formData.value.nome,
         endereco: formData.value.endereco,
         andar: formData.value.andar,
-        // x: formData.value.x, // Envia se for editável
-        // y: formData.value.y, // Envia se for editável
+        x: formData.value.x,
+        y: formData.value.y
       };
     const success = await updateLocation(dataToSend); // Usa a função do serviço
     if (success) {
@@ -223,12 +301,37 @@ async function handleDeleteLocation(id) {
   }
 }
 
-
 // --- Funções de UI ---
+const handleSubmit = async () => {
+  try {
+    if (localLoading.value) return;
 
-function resetForm() {
-  formData.value = { id: null, nome: '', endereco: '', andar: '' /*, x: null, y: null */ };
-}
+    // Validar e corrigir coordenadas antes de enviar
+    formData.value.x = validateCoordinates(formData.value.x);
+    formData.value.y = validateCoordinates(formData.value.y);
+
+    localLoading.value = true;
+    localError.value = '';
+
+    if (isEditing.value) {
+      await handleUpdateLocation();
+    } else {
+      await handleAddLocation();
+    }
+
+    // Limpa o formulário e recarrega os dados
+    resetForm();
+    showForm.value = false;
+    isEditing.value = false;
+    localStorage.removeItem('locationFormData');
+    await loadLocations();
+  } catch (error) {
+    console.error('Erro ao salvar local:', error);
+    localError.value = 'Erro ao salvar local. Por favor, tente novamente.';
+  } finally {
+    localLoading.value = false;
+  }
+};
 
 function showAddForm() {
   resetForm();
@@ -255,30 +358,10 @@ function showEditForm(location) {
 }
 
 function cancelForm() {
+  resetForm();
   showForm.value = false;
   isEditing.value = false;
-  resetForm();
-}
-
-function handleSubmit() {
-  // Validação básica
-  if (!formData.value.nome || !formData.value.endereco || !formData.value.andar) {
-    localError.value = "Por favor, preencha nome, endereço e andar.";
-    clearLocalMessages();
-    return;
-  }
-  // Adicione validação para X/Y se forem editáveis
-
-  if (isEditing.value) {
-    if(!formData.value.id) {
-      localError.value = "ID do local ausente para edição.";
-      clearLocalMessages();
-      return;
-    }
-    handleUpdateLocation();
-  } else {
-    handleAddLocation();
-  }
+  localStorage.removeItem('locationFormData');
 }
 
 function confirmDelete(id) {
@@ -287,140 +370,233 @@ function confirmDelete(id) {
   }
 }
 
-// Carrega locais iniciais ao montar o componente
-onMounted(() => {
-  loadLocations();
-});
+
 </script>
 
 <style scoped>
-/* Estilos específicos para o container geral da página admin */
 .admin-container {
+  padding: 20px;
+  height: 100vh;
+  overflow-y: auto;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: #f8f9fa;
+}
+
+.admin-container h1 {
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.admin-container h2 {
+  color: #2c3e50;
+  margin: 1.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+a {
+  color: #3498db;
+  text-decoration: none;
+  margin-right: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  background-color: #3498db;
+  color: #fff;
+  text-decoration: none;
+}
+
+.form-section {
+  margin: 20px 0;
   padding: 25px;
-  max-width: 900px; /* Limita a largura para melhor leitura */
-  margin: 20px auto; /* Centraliza */
-  font-family: sans-serif;
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-/* Estilos para links e botões */
-a {
-  color: #007bff;
-  text-decoration: none;
-  margin-bottom: 15px;
-  display: inline-block;
-}
-a:hover {
-  text-decoration: underline;
-}
-
-h1, h2 {
-  color: #333;
-  margin-bottom: 15px;
-}
-
-.loading, .error, .success {
-  padding: 12px 15px;
-  margin-bottom: 20px;
-  border-radius: 5px;
-  text-align: center;
-  font-size: 0.95em;
-}
-.loading { background-color: #eef; color: #333; }
-.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-
-.btn {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  margin: 5px;
-  font-size: 1em;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-.btn:hover:not(:disabled) {
-  opacity: 0.9;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-}
-.btn-primary { background-color: #007bff; color: white; }
-.btn-success { background-color: #28a745; color: white; }
-.btn-warning { background-color: #ffc107; color: #212529; border: 1px solid #d39e00;}
-.btn-danger { background-color: #dc3545; color: white; }
-.btn-secondary { background-color: #6c757d; color: white; }
-.btn-sm { padding: 6px 12px; font-size: 0.85em; }
-.btn:disabled { background-color: #e9ecef; color: #6c757d; cursor: not-allowed; box-shadow: none; }
-
-
-/* Estilos para o formulário */
-.form-section {
-  margin-top: 25px;
-  margin-bottom: 30px;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background-color: #fdfdfd;
-}
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 1.2rem;
 }
-.form-group label {
+
+label {
   display: block;
-  margin-bottom: 6px;
-  font-weight: bold;
-  color: #555;
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+  font-weight: 500;
+  font-size: 0.95rem;
 }
-.form-group input[type="text"],
-.form-group input[type="number"], /* Estilo para inputs numéricos (X/Y) */
-.form-group select {
-  width: 100%; /* Full width */
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box; /* Include padding in width */
-  font-size: 1em;
+
+input[type="text"],
+input[type="number"],
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 1rem;
+  background-color: #fff;
+  transition: all 0.2s ease;
 }
-.form-group input[disabled] {
-  background-color: #e9ecef;
-  cursor: not-allowed;
+
+input[type="text"]:hover,
+input[type="number"]:hover {
+  border-color: #cbd5e0;
 }
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.2);
+}
+
 .form-actions {
-  margin-top: 20px;
-  text-align: right; /* Alinha botões à direita */
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 12px;
 }
 
 /* Estilos para a tabela */
 .table-container {
-  overflow-x: auto; /* Permite rolagem horizontal em telas pequenas */
+  margin-top: 20px;
+  max-height: calc(100vh - 500px);
+  overflow-y: auto;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
 }
+
+.table-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 8px;
+  border: 2px solid #f1f5f9;
+}
+
 .locations-table {
   width: 100%;
-  margin-top: 25px;
-  border-collapse: collapse;
-  font-size: 0.9em;
+  border-collapse: separate;
+  border-spacing: 0;
 }
-.locations-table th,
-.locations-table td {
-  border: 1px solid #dee2e6;
-  padding: 10px 12px;
-  text-align: left;
-  vertical-align: middle;
+
+.locations-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
+
 .locations-table th {
-  background-color: #f8f9fa;
-  font-weight: bold;
-  color: #495057;
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-weight: 600;
+  padding: 16px;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
 }
-.locations-table tr:nth-child(even) {
-  background-color: #f8f9fa;
+
+.locations-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
 }
-.locations-table tr:hover {
-    background-color: #e9ecef;
+
+.locations-table tr:last-child td {
+  border-bottom: none;
 }
+
+.locations-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.locations-table tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
 .locations-table td button {
-    margin-right: 5px; /* Espaço entre botões de ação */
+  margin-right: 8px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+/* Estilos para os botões */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.btn-success {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #27ae60;
+}
+
+.btn-warning {
+  background-color: #f1c40f;
+  color: #2c3e50;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: #f39c12;
+}
+
+.btn-danger {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #c0392b;
+}
+
+.btn-secondary {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #7f8c8d;
 }
 </style>
