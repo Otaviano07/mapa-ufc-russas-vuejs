@@ -3,29 +3,41 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useMapRouting } from '../composables/useMapRouting';
 
 const props = defineProps({
-  waypoints: {
-    type: Array,
-    default: () => []
+  mapImageUrl: {
+    type: String,
+    default: ''
   },
   'locais-on-floor': {
     type: Array,
     default: () => []
   },
-  currentFloor: {
-    type: String,
-    required: true
-  },
   userPosition: {
     type: Object,
     default: null
   },
-  selectedLocation: {
+  routeSegments: {
+    type: Array,
+    default: () => []
+  },
+  debugWaypoints: {
+    type: Array,
+    default: () => []
+  },
+  selectedLocalId: {
+    type: String,
+    default: null
+  },
+  popupInfo: {
     type: Object,
     default: null
   },
   mapScale: {
     type: Number,
     default: 1
+  },
+  currentFloor: {
+    type: String,
+    required: true
   },
   loading: {
     type: Boolean,
@@ -47,41 +59,29 @@ const mapDimensions = ref({ width: 0, height: 0 });
 
 // Filtra locais do andar atual
 const currentFloorLocations = computed(() => {
-  console.log('Locais recebidos:', props['locais-on-floor']);
-  return props['locais-on-floor'];
+  console.log('Componente MapDisplay - Locais recebidos:', props['locais-on-floor']);
+  return props['locais-on-floor'] || [];
 });
 
-// Configuração do sistema de rotas
-const waypointsRef = ref(props.waypoints); // Ref para os waypoints
-const { routeSegments, debugWaypoints } = useMapRouting(
-  ref(props.userPosition),
-  ref(props.selectedLocation),
-  ref(props.currentFloor),
-  ref(props.mapScale),
-  mapDimensions,
-  waypointsRef
-);
-
-// Atualiza os waypoints quando mudam
-watch(() => props.waypoints, (newWaypoints) => {
-  waypointsRef.value = newWaypoints;
-}, { deep: true });
+// Verifica se o local está selecionado
+const isLocalSelected = (local) => {
+  return local.id === props.selectedLocalId;
+};
 
 // Estilo do mapa
 const mapStyle = computed(() => ({
   transform: `scale(${props.mapScale})`,
-  cursor: 'grab'
+  cursor: isDragging.value ? 'grabbing' : 'grab'
 }));
 
 // Estilo do cursor quando arrastando
 const isDragging = ref(false);
-const handleMouseDown = () => isDragging.value = true;
-const handleMouseUp = () => isDragging.value = false;
-
-// Estilo do cursor computado
-const cursorStyle = computed(() => ({
-  cursor: isDragging.value ? 'grabbing' : 'grab'
-}));
+const handleMouseDown = () => {
+  isDragging.value = true;
+};
+const handleMouseUp = () => {
+  isDragging.value = false;
+};
 
 // Handlers de eventos
 const handleMapClick = (event) => {
@@ -95,6 +95,7 @@ const handleMapClick = (event) => {
 };
 
 const handleLocationClick = (location) => {
+  console.log('Local clicado:', location);
   emit('marker-click', location);
 };
 
@@ -118,38 +119,39 @@ const updateMapDimensions = () => {
   emit('update:mapDimensions', mapDimensions.value);
 };
 
+// Verifica URL da imagem para debug
+watch(() => props.mapImageUrl, (newUrl) => {
+  console.log('URL da imagem do mapa atualizada:', newUrl);
+}, { immediate: true });
+
 // Lifecycle hooks
 onMounted(() => {
+  console.log('MapDisplay montado - URL da imagem:', props.mapImageUrl);
   updateMapDimensions();
   window.addEventListener('resize', updateMapDimensions);
-  
-  // Configurar ResizeObserver para mapImageRef se necessário
-  if (mapImageRef.value) {
-    const resizeObserver = new ResizeObserver(() => {
-      updateMapDimensions();
-    });
-    resizeObserver.observe(mapImageRef.value);
-  }
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateMapDimensions);
-  
-  // Limpar ResizeObserver se foi configurado
-  if (mapImageRef.value && resizeObserver) {
-    resizeObserver.disconnect();
-  }
 });
 </script>
 
 <template>
-  <div class="map-container" ref="mapRef">
+  <div id="map-container" class="map-container" ref="mapRef" @mousedown="handleMouseDown" @mouseup="handleMouseUp" @mouseleave="handleMouseUp">
+    <!-- Fallback se a imagem não carregar -->
+    <div v-if="!mapImageUrl || mapImageUrl === ''" class="map-placeholder">
+      <p>Imagem do mapa não disponível para o andar atual</p>
+    </div>
+    
+    <!-- Imagem do mapa -->
     <img
+      v-else
       ref="mapImageRef"
-      :src="props.mapImageUrl"
+      :src="mapImageUrl"
       class="map-image"
       :style="mapStyle"
       @click="handleMapClick"
+      @error="e => console.error('Erro ao carregar imagem:', e)"
       alt="Mapa do andar"
     />
     
@@ -158,7 +160,7 @@ onUnmounted(() => {
       v-for="location in currentFloorLocations"
       :key="location.id"
       class="location-marker"
-      :class="{ 'selected': location === selectedLocation }"
+      :class="{ 'selected': isLocalSelected(location) }"
       :style="{
         left: `${location.x}%`,
         top: `${location.y}%`
@@ -170,10 +172,10 @@ onUnmounted(() => {
       <span class="marker-label">{{ location.nome }}</span>
     </div>
     
-    <!-- Waypoints de debug (se necessário) -->
+    <!-- Waypoints de debug -->
     <div
-      v-for="waypoint in debugWaypoints"
-      :key="waypoint.id"
+      v-for="(waypoint, idx) in debugWaypoints"
+      :key="`wp-${idx}`"
       class="waypoint-marker"
       :style="{
         left: `${waypoint.x}%`,
@@ -184,11 +186,11 @@ onUnmounted(() => {
     <!-- Segmentos da rota -->
     <div
       v-for="(segment, index) in routeSegments"
-      :key="index"
-      class="route-segment"
+      :key="`route-${index}`"
+      class="path-line"
       :style="{
-        left: `${segment.x}%`,
-        top: `${segment.y}%`,
+        left: `${segment.startX}%`,
+        top: `${segment.startY}%`,
         width: `${segment.length}%`,
         transform: `rotate(${segment.angle}deg)`
       }"
@@ -204,9 +206,22 @@ onUnmounted(() => {
       }"
     />
     
+    <!-- Popup de informação -->
+    <div
+      v-if="popupInfo && popupInfo.visible"
+      class="location-popup"
+      :style="{
+        left: `${popupInfo.x}%`,
+        top: `${popupInfo.y}%`
+      }"
+    >
+      {{ popupInfo.content }}
+    </div>
+    
     <!-- Indicador de carregamento -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
+      <p>Carregando mapa...</p>
     </div>
   </div>
 </template>
@@ -217,6 +232,20 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.map-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: #e9e9e9;
+  color: #666;
+  font-weight: bold;
+  text-align: center;
+  padding: 20px;
 }
 
 .map-image {
@@ -224,24 +253,45 @@ onUnmounted(() => {
   height: 100%;
   object-fit: contain;
   transform-origin: center center;
+  background-color: #fff;
 }
 
 .location-marker {
   position: absolute;
   width: 20px;
   height: 20px;
-  background-color: #FF4444;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-  z-index: 2;
-  box-shadow: 0 0 0 2px white;
-  transition: all 0.3s ease;
+  background-color: #007bff; /* Cor do marcador */
+  border: 2px solid #fff; /* Borda branca */
+  transform: translate(-50%, -50%); /* Centraliza o marcador */
+  cursor: pointer; /* Muda o cursor para uma mão */
+}
+
+.location-marker::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-top: 10px solid #007bff; /* Cor do alfinete */
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+}
+
+.location-marker:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 0 0 3px white, 0 0 8px rgba(0, 0, 0, 0.5);
 }
 
 .location-marker.selected {
   background-color: #4CAF50;
-  box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.3);
+  width: 24px;
+  height: 24px;
+  box-shadow: 0 0 0 3px white, 0 0 10px rgba(76, 175, 80, 0.8);
+  z-index: 25;
+  animation: pulse-marker 2s infinite;
 }
 
 .marker-label {
@@ -249,65 +299,97 @@ onUnmounted(() => {
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  white-space: nowrap;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: 3px;
   font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  margin-bottom: 5px;
+}
+
+.location-marker:hover .marker-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-5px);
+}
+
+.location-marker.selected .marker-label {
+  opacity: 1;
+  background-color: rgba(76, 175, 80, 0.9);
+  transform: translateX(-50%) translateY(-5px);
+  font-weight: bold;
+}
+
+.user-marker {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-color: #2196F3;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  box-shadow: 0 0 0 2px white, 0 0 15px rgba(33, 150, 243, 0.8);
+  animation: pulse 1.5s infinite;
 }
 
 .waypoint-marker {
   position: absolute;
   width: 8px;
   height: 8px;
-  background-color: rgba(255, 0, 0, 0.5);
+  background-color: #44bb44;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  z-index: 1;
+  z-index: 15;
 }
 
-.route-segment {
+.path-line {
   position: absolute;
   height: 4px;
-  background-color: #4CAF50;
-  transform-origin: left center;
-  z-index: 1;
+  background-color: #6FA1EC;
+  transform-origin: 0 50%;
+  z-index: 10;
+  pointer-events: none;
 }
 
-.user-marker {
+.location-popup {
   position: absolute;
-  width: 16px;
-  height: 16px;
-  background-color: #4285F4;
-  border-radius: 50%;
-  border: 2px solid white;
-  transform: translate(-50%, -50%);
-  z-index: 3;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-  animation: pulse 2s infinite;
+  background-color: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  white-space: nowrap;
+  transform: translate(-50%, -130%);
+  z-index: 30;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .loading-overlay {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   background-color: rgba(255, 255, 255, 0.7);
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  z-index: 4;
+  z-index: 100;
 }
 
 .loading-spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 4px solid #3498db;
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
-  border-radius: 50%;
   animation: spin 1s linear infinite;
+  margin-bottom: 10px;
 }
 
 @keyframes spin {
@@ -316,8 +398,36 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.4); }
-  70% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 10px rgba(66, 133, 244, 0); }
-  100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
+  0% { box-shadow: 0 0 0 2px white, 0 0 5px rgba(33, 150, 243, 0.8); }
+  50% { box-shadow: 0 0 0 2px white, 0 0 20px rgba(33, 150, 243, 0.8); }
+  100% { box-shadow: 0 0 0 2px white, 0 0 5px rgba(33, 150, 243, 0.8); }
+}
+
+@keyframes pulse-marker {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.1); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (max-width: 768px) {
+  .location-marker {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .location-marker.selected {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .user-marker {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .marker-label {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
 }
 </style>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo do mapa -->
+  <rect width="800" height="600" fill="#f0f8ff" />
+  
+  <!-- Grade de referência -->
+  <g stroke="#e0e0e0" stroke-width="1">
+    <!-- Linhas horizontais -->
+    <line x1="0" y1="100" x2="800" y2="100" />
+    <line x1="0" y1="200" x2="800" y2="200" />
+    <line x1="0" y1="300" x2="800" y2="300" />
+    <line x1="0" y1="400" x2="800" y2="400" />
+    <line x1="0" y1="500" x2="800" y2="500" />
+    
+    <!-- Linhas verticais -->
+    <line x1="100" y1="0" x2="100" y2="600" />
+    <line x1="200" y1="0" x2="200" y2="600" />
+    <line x1="300" y1="0" x2="300" y2="600" />
+    <line x1="400" y1="0" x2="400" y2="600" />
+    <line x1="500" y1="0" x2="500" y2="600" />
+    <line x1="600" y1="0" x2="600" y2="600" />
+    <line x1="700" y1="0" x2="700" y2="600" />
+  </g>
+  
+  <!-- Salas e corredores -->
+  <g>
+    <!-- Parede externa -->
+    <rect x="50" y="50" width="700" height="500" fill="none" stroke="#333" stroke-width="4" />
+    
+    <!-- Área central -->
+    <rect x="200" y="150" width="400" height="300" fill="#e6e6fa" stroke="#9370db" stroke-width="2" />
+    
+    <!-- Corredores principais -->
+    <rect x="50" y="280" width="700" height="40" fill="#f0f0f0" stroke="#ccc" stroke-width="1" />
+    <rect x="380" y="50" width="40" height="500" fill="#f0f0f0" stroke="#ccc" stroke-width="1" />
+    
+    <!-- Salas -->
+    <g fill="#fff" stroke="#666" stroke-width="2">
+      <!-- Bloco superior esquerdo -->
+      <rect x="70" y="70" width="130" height="100" />
+      <rect x="70" y="170" width="130" height="110" />
+      
+      <!-- Bloco superior direito -->
+      <rect x="600" y="70" width="130" height="100" />
+      <rect x="600" y="170" width="130" height="110" />
+      
+      <!-- Bloco inferior esquerdo -->
+      <rect x="70" y="320" width="130" height="100" />
+      <rect x="70" y="420" width="130" height="110" />
+      
+      <!-- Bloco inferior direito -->
+      <rect x="600" y="320" width="130" height="100" />
+      <rect x="600" y="420" width="130" height="110" />
+    </g>
+    
+    <!-- Escadas -->
+    <g fill="none" stroke="#333" stroke-width="2">
+      <path d="M 450,370 L 530,370 L 530,450 L 450,450 Z" />
+      <path d="M 455,380 L 525,380" />
+      <path d="M 455,390 L 525,390" />
+      <path d="M 455,400 L 525,400" />
+      <path d="M 455,410 L 525,410" />
+      <path d="M 455,420 L 525,420" />
+      <path d="M 455,430 L 525,430" />
+      <path d="M 455,440 L 525,440" />
+    </g>
+    
+    <!-- Elevador -->
+    <rect x="250" y="370" width="80" height="80" fill="#d3d3d3" stroke="#333" stroke-width="2" />
+    <line x1="250" y1="410" x2="330" y2="410" stroke="#333" stroke-width="2" />
+  </g>
+  
+  <!-- Textos -->
+  <g font-family="Arial, sans-serif" font-size="12" text-anchor="middle">
+    <text x="135" y="120" fill="#333">Sala 1101</text>
+    <text x="135" y="225" fill="#333">Sala 1102</text>
+    <text x="665" y="120" fill="#333">Sala 1103</text>
+    <text x="665" y="225" fill="#333">Sala 1104</text>
+    <text x="135" y="370" fill="#333">Sala 1105</text>
+    <text x="135" y="475" fill="#333">Sala 1106</text>
+    <text x="665" y="370" fill="#333">Sala 1107</text>
+    <text x="665" y="475" fill="#333">Sala 1108</text>
+    
+    <text x="290" y="410" fill="#333">Elevador</text>
+    <text x="490" y="410" fill="#333">Escada</text>
+    
+    <text x="400" y="300" fill="#333" font-size="16">Área de Convivência</text>
+  </g>
+  
+  <!-- Título -->
+  <text x="400" y="30" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#333">Primeiro Andar - UFC Russas</text>
+  
+  <!-- Ponto de referência (estrela) -->
+  <g transform="translate(400, 300)">
+    <path d="M 0 -20 L 4 -6 L 20 -6 L 8 2 L 12 18 L 0 9 L -12 18 L -8 2 L -20 -6 L -4 -6 Z" fill="#ff9800" stroke="#ff7000" stroke-width="1" />
+  </g>
+</svg> 

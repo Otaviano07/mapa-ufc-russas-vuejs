@@ -1,275 +1,207 @@
-import { ref, shallowRef } from 'vue';
+import { ref } from 'vue';
 
-// Cache de dados
-const dataCache = {
-  locations: shallowRef(null),
-  waypoints: shallowRef(null),
-  floors: shallowRef(null),
-  lastFetch: {
-    locations: 0,
-    waypoints: 0,
-    floors: 0
-  }
+// Dados simulados para localizações
+const locationsData = [
+  { id: 1, nome: 'Bloco 1', descricao: 'Salas de aula e laboratórios', categoria: 'Acadêmico', andar: 1, latitude: -4.972138, longitude: -37.977455 },
+  { id: 2, nome: 'Bloco 2', descricao: 'Departamentos e coordenações', categoria: 'Administrativo', andar: 1, latitude: -4.971956, longitude: -37.977100 },
+  { id: 3, nome: 'Biblioteca', descricao: 'Acervo e salas de estudo', categoria: 'Acadêmico', andar: 1, latitude: -4.972401, longitude: -37.977012 },
+  { id: 4, nome: 'Cantina', descricao: 'Área de alimentação', categoria: 'Serviços', andar: 1, latitude: -4.972587, longitude: -37.977455 },
+  { id: 5, nome: 'Laboratório de Informática', descricao: 'Computadores para uso dos alunos', categoria: 'Acadêmico', andar: 2, latitude: -4.972138, longitude: -37.977256 },
+  { id: 6, nome: 'Auditório', descricao: 'Eventos e palestras', categoria: 'Comum', andar: 2, latitude: -4.972300, longitude: -37.977356 },
+  { id: 7, nome: 'Banheiros', descricao: 'Banheiros masculino e feminino', categoria: 'Serviços', andar: 1, latitude: -4.972456, longitude: -37.977200 },
+  { id: 8, nome: 'Elevador', descricao: 'Acesso entre andares', categoria: 'Acessibilidade', andar: 1, latitude: -4.972200, longitude: -37.977300 },
+  { id: 9, nome: 'Secretaria Acadêmica', descricao: 'Atendimento aos estudantes', categoria: 'Administrativo', andar: 1, latitude: -4.972050, longitude: -37.977250 },
+  { id: 10, nome: 'Laboratório de Química', descricao: 'Experimentos e aulas práticas', categoria: 'Acadêmico', andar: 2, latitude: -4.972350, longitude: -37.977150 }
+];
+
+// Pontos de referência para navegação
+const waypointsData = [
+  { id: 1, nome: 'Entrada Principal', descricao: 'Acesso principal ao campus', latitude: -4.972700, longitude: -37.977500 },
+  { id: 2, nome: 'Interseção Blocos 1-2', descricao: 'Cruzamento entre blocos', latitude: -4.972050, longitude: -37.977300 },
+  { id: 3, nome: 'Rampa de Acesso', descricao: 'Acesso para cadeirantes', latitude: -4.972400, longitude: -37.977250 },
+  { id: 4, nome: 'Escada Central', descricao: 'Escada para o segundo andar', latitude: -4.972200, longitude: -37.977200 },
+  { id: 5, nome: 'Estacionamento A', descricao: 'Área de estacionamento frontal', latitude: -4.972800, longitude: -37.977600 }
+];
+
+// Informações sobre os andares
+const floorsData = [
+  { id: 1, nome: 'Térreo', descricao: 'Andar principal com recepção' },
+  { id: 2, nome: 'Primeiro Andar', descricao: 'Salas administrativas e laboratórios especiais' }
+];
+
+// Estado global do serviço de localização (para monitorar estados e erros)
+export const locationServiceState = {
+  loading: ref(false),
+  error: ref(null),
+  lastUpdate: ref(null)
 };
 
-// Tempo de cache em millisegundos (5 minutos)
-const CACHE_DURATION = 5 * 60 * 1000;
+// Definindo a classe LocationService antes de usá-la
+class LocationService {
+  /**
+   * Retorna todas as localizações
+   * @returns {Promise<Array>} Lista de todas as localizações
+   */
+  async getAllLocations() {
+    // Simulando um delay de rede
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return [...locationsData];
+  }
 
-// --- Configuração da API ---
-const API_URL = import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL;
+  /**
+   * Busca uma localização pelo ID
+   * @param {number} id - ID da localização
+   * @returns {Promise<Object>} A localização encontrada ou undefined
+   */
+  async getLocationById(id) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return locationsData.find(loc => loc.id === id);
+  }
 
-if (!API_URL) {
-  console.error("VITE_GOOGLE_APPS_SCRIPT_URL não está definida no arquivo .env. As chamadas de API falharão.");
+  /**
+   * Cria uma nova localização
+   * @param {Object} locationData - Dados da nova localização
+   * @returns {Promise<Object>} A nova localização criada
+   */
+  async createLocation(locationData) {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    
+    // Simulando criação (na prática, isso seria feito por um backend)
+    const newId = Math.max(...locationsData.map(loc => loc.id)) + 1;
+    const newLocation = { id: newId, ...locationData };
+    locationsData.push(newLocation);
+    
+    return newLocation;
+  }
+
+  /**
+   * Atualiza uma localização existente
+   * @param {number} id - ID da localização a ser atualizada
+   * @param {Object} locationData - Novos dados para a localização
+   * @returns {Promise<Object>} A localização atualizada
+   */
+  async updateLocation(id, locationData) {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    const index = locationsData.findIndex(loc => loc.id === id);
+    if (index === -1) {
+      throw new Error('Localização não encontrada');
+    }
+    
+    const updatedLocation = { ...locationsData[index], ...locationData };
+    locationsData[index] = updatedLocation;
+    
+    return updatedLocation;
+  }
+
+  /**
+   * Remove uma localização
+   * @param {number} id - ID da localização a ser removida
+   * @returns {Promise<boolean>} Verdadeiro se removido com sucesso
+   */
+  async deleteLocation(id) {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    const index = locationsData.findIndex(loc => loc.id === id);
+    if (index === -1) {
+      throw new Error('Localização não encontrada');
+    }
+    
+    locationsData.splice(index, 1);
+    return true;
+  }
+
+  /**
+   * Retorna todos os pontos de referência
+   * @returns {Promise<Array>} Lista de waypoints
+   */
+  async getAllWaypoints() {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return [...waypointsData];
+  }
+
+  /**
+   * Retorna informações sobre os andares
+   * @returns {Promise<Array>} Lista de andares
+   */
+  async getFloors() {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return [...floorsData];
+  }
+
+  /**
+   * Filtra localizações por categoria
+   * @param {string} categoria - Categoria para filtrar
+   * @returns {Promise<Array>} Localizações filtradas
+   */
+  async getLocationsByCategory(categoria) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return locationsData.filter(loc => loc.categoria === categoria);
+  }
+
+  /**
+   * Filtra localizações por andar
+   * @param {number} andar - Número do andar
+   * @returns {Promise<Array>} Localizações filtradas
+   */
+  async getLocationsByFloor(andar) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return locationsData.filter(loc => loc.andar === andar);
+  }
 }
 
-// Estados globais do serviço (podem ser usados pelos componentes se necessário)
-const loading = ref(false);
-const error = ref(null);
-const successMessage = ref(null);
-
-// Helper para limpar mensagens
-function clearMessages() {
-  setTimeout(() => {
-    error.value = null;
-    successMessage.value = null;
-  }, 5000);
-}
+const locationService = new LocationService();
 
 /**
- * Função interna genérica para chamar a API.
- * @param {object} params - Parâmetros para enviar (inclui 'action').
- * @param {string} method - Método HTTP ('GET', 'POST', etc.). GET é o padrão.
- * @returns {Promise<object|null>} - Os dados da resposta ou null em caso de erro.
- */
-async function callApi(params = {}, method = 'GET') {
-  if (!API_URL) {
-    const errorMessage = "URL da API não configurada no .env.";
-    error.value = errorMessage;
-    console.error(errorMessage);
-    return null;
-  }
-
-  loading.value = true;
-  error.value = null;
-
-  const queryParams = new URLSearchParams(params);
-  const url = `${API_URL}${params ? `?${queryParams.toString()}` : ''}`;
-
-  const options = {
-    method,
-    mode: 'cors',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    redirect: 'follow',
-  };
-
-  if (method === 'POST') {
-    options.body = queryParams.toString();
-  }
-
-  console.log(`Chamando API (${params.action || 'N/A'}) | Método: ${method}`);
-  console.log('URL:', url);
-  if (options.body) console.log("Body:", options.body);
-
-  try {
-    const response = await fetch(url, options);
-
-    console.log('API Response status:', response.status);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    let result;
-    const contentType = response.headers.get("content-type");
-
-    if (contentType && contentType.includes("application/json")) {
-      result = await response.json();
-    } else {
-      const textResponse = await response.text();
-      console.warn(`Resposta da API não é JSON (Content-Type: ${contentType}). Texto:`, textResponse.substring(0, 500));
-      if (response.status === 302 || textResponse.toLowerCase().includes('<title>autorização necessária</title>') || textResponse.toLowerCase().includes('required permissions')) {
-        throw new Error(`Falha na API: Possível erro de permissão ou URL /dev inválida. Verifique permissões da Web App e use a URL /exec.`);
-      }
-      throw new Error(`Resposta inesperada (não-JSON): Status ${response.status}. Resposta: ${textResponse.substring(0, 150)}...`);
-    }
-
-    console.log("Resposta da API:", result);
-
-    if (!response.ok || result.status === 'error' || result.error) {
-      const errorMessage = result?.message || result?.error || `Erro HTTP ${response.status}`;
-      throw new Error(errorMessage);
-    }
-
-    const readActions = ['read', 'readAll', 'readLocais', 'readWaypoints', 'readFloors'];
-    if (params.action && !readActions.includes(params.action)) {
-      successMessage.value = result.message || 'Operação realizada com sucesso!';
-      clearMessages();
-    }
-
-    return result;
-
-  } catch (err) {
-    console.error(`Erro na API action=${params.action || 'N/A'}, method=${method}:`, err);
-    error.value = `Falha na operação (${params.action || 'leitura'}): ${err.message}`;
-    successMessage.value = null;
-    return null;
-  } finally {
-    loading.value = false;
-  }
-}
-
-export async function fetchWaypoints(forceRefresh = false) {
-  console.log('Iniciando fetchWaypoints...');
-  try {
-    const now = Date.now();
-
-    if (!forceRefresh &&
-        dataCache.waypoints.value &&
-        (now - dataCache.lastFetch.waypoints <= CACHE_DURATION)) {
-      console.log('Usando cache de waypoints');
-      return dataCache.waypoints.value;
-    }
-
-    const response = await callApi({ action: 'readWaypoints' });
-    if (!response) return null;
-
-    console.log('Resposta de readWaypoints:', response);
-
-    const processedWaypoints = response.waypoints || [];
-    dataCache.waypoints.value = processedWaypoints;
-    dataCache.lastFetch.waypoints = now;
-
-    console.log('Waypoints processados:', processedWaypoints);
-
-    return processedWaypoints;
-  } catch (err) {
-    console.error('Erro ao buscar waypoints:', err);
-    error.value = 'Falha ao carregar waypoints.';
-    return null;
-  }
-}
-
-/**
- * Busca todos os dados iniciais necessários para o mapa.
- * @returns {Promise<{locais: Array, waypoints: Array, floors: Array}|null>}
+ * Busca todos os dados iniciais necessários para o mapa
+ * @param {boolean} forceRefresh - Se verdadeiro, recarrega os dados mesmo se já estiverem em cache
+ * @returns {Promise<Object>} Objeto com locais, waypoints e andares
  */
 export async function fetchInitialData(forceRefresh = false) {
+  locationServiceState.loading.value = true;
+  locationServiceState.error.value = null;
+  
   try {
-    const now = Date.now();
-    let needsRefresh = forceRefresh;
-
-    if (!needsRefresh) {
-      needsRefresh = !dataCache.locations.value ||
-                     !dataCache.waypoints.value ||
-                     !dataCache.floors.value ||
-                     (now - dataCache.lastFetch.locations > CACHE_DURATION) ||
-                     (now - dataCache.lastFetch.waypoints > CACHE_DURATION) ||
-                     (now - dataCache.lastFetch.floors > CACHE_DURATION);
-    }
-
-    if (needsRefresh) {
-      const readAllResponse = await callApi({ action: 'readAll' });
-      if (!readAllResponse) return null;
-
-      dataCache.locations.value = readAllResponse.locais || [];
-      dataCache.lastFetch.locations = now;
-
-      await fetchWaypoints();
-      dataCache.lastFetch.waypoints = now;
-
-      dataCache.floors.value = readAllResponse.floors || [];
-      dataCache.lastFetch.floors = now;
-    }
-
-    console.log('Dados processados:');
-    console.log(`- Locais: ${dataCache.locations.value?.length || 0}`);
-    console.log(`- Waypoints: ${dataCache.waypoints.value?.length || 0}`);
-    console.log(`- Exemplo de waypoint:`, dataCache.waypoints.value?.[0] || {});
-    console.log(`- Floors: ${dataCache.floors.value || []}`);
-
+    // Simulando tempo de requisição
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Mapeia os dados para formato adequado ao mapa
+    const locais = await locationService.getAllLocations();
+    const waypoints = await locationService.getAllWaypoints();
+    const andares = await locationService.getFloors();
+    
+    // Adiciona informações adicionais para o funcionamento do mapa
+    const mappedFloors = andares.map(andar => ({
+      ...andar,
+      id: andar.id.toString(), // Garante que ID é string
+      nome: andar.nome,
+      image: `/maps/${andar.id === 1 ? 'terreo' : andar.id === 2 ? 'primeiro' : 'segundo'}.svg`
+    }));
+    
+    // Mapeia locais para incluir coordenadas x, y relativas para o SVG
+    const mappedLocations = locais.map(local => ({
+      ...local,
+      andar: local.andar.toString(), // Converte andar para string para compatibilidade
+      // Valores x, y são calculados para posicionamento no mapa (hipotético)
+      x: 40 + Math.random() * 60, // Posição x aleatória entre 40% e 60% da largura do mapa
+      y: 30 + Math.random() * 50  // Posição y aleatória entre 30% e 80% da altura do mapa
+    }));
+    
+    // Atualiza o timestamp de última atualização
+    locationServiceState.lastUpdate.value = new Date();
+    
     return {
-      locais: dataCache.locations.value || [],
-      waypoints: dataCache.waypoints.value || [],
-      floors: dataCache.floors.value || [{ id: 'terreo', nome: 'Térreo' }]
+      locais: mappedLocations,
+      waypoints,
+      floors: mappedFloors
     };
-  } catch (err) {
-    console.error('Erro ao buscar dados iniciais:', err);
-    error.value = 'Erro ao carregar dados iniciais.';
+  } catch (error) {
+    console.error('Erro ao buscar dados iniciais:', error);
+    locationServiceState.error.value = `Erro ao carregar dados: ${error.message}`;
     return null;
+  } finally {
+    locationServiceState.loading.value = false;
   }
 }
 
-/**
- * Busca apenas os locais (para o Admin Panel, por exemplo).
- * @returns {Promise<Array|null>}
- */
-export const fetchAdminLocations = async () => {
-  const result = await callApi({ action: 'read' }, 'GET');
-
-  if (result && result.locais && Array.isArray(result.locais)) {
-    return result.locais;
-  } else {
-    console.error("Dados inválidos em fetchAdminLocations:", result);
-    error.value = "Erro ao carregar locais.";
-    return [];
-  }
-};
-
-/**
- * Cria um novo local via API.
- * @param {object} locationData - { nome, endereco, andar }.
- * @returns {Promise<boolean>} - True se sucesso, false se falha.
- */
-export const createLocation = async (locationData) => {
-  const result = await callApi({
-    action: 'create',
-    tipo: locationData.tipo || 'location',
-    nome: locationData.nome,
-    andar: locationData.andar,
-    x: locationData.x,
-    y: locationData.y
-  }, 'POST');
-  return !!result;
-};
-
-/**
- * Atualiza um local existente via API.
- * @param {object} locationData - { id, nome?, endereco?, andar? }.
- * @returns {Promise<boolean>} - True se sucesso, false se falha.
- */
-export const updateLocation = async (locationData) => {
-  const params = {
-    action: 'update',
-    id: locationData.id,
-    ...(locationData.tipo && { tipo: locationData.tipo }),
-    ...(locationData.nome && { nome: locationData.nome }),
-    ...(locationData.endereco && { endereco: locationData.endereco }),
-    ...(locationData.andar && { andar: locationData.andar }),
-    ...(locationData.x !== undefined && { x: locationData.x }),
-    ...(locationData.y !== undefined && { y: locationData.y }),
-  };
-  const result = await callApi(params, 'POST');
-  return !!result;
-};
-
-/**
- * Exclui um local via API.
- * @param {string|number} id - ID do local a ser excluído.
- * @returns {Promise<boolean>} - True se sucesso, false se falha.
- */
-export const deleteLocation = async (id) => {
-  const result = await callApi({
-    action: 'delete',
-    id
-  }, 'POST');
-  return !!result;
-};
-
-// Exporta os estados reativos para observação externa, se necessário
-export const locationServiceState = {
-  loading,
-  error,
-  successMessage
-};
+export default locationService;

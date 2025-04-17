@@ -1,25 +1,22 @@
 import { ref, watch } from 'vue';
 
-/**
- * Recebe as referências para posição, destino, andar atual e waypoints.
- * Retorna os segmentos da rota para renderizar e waypoints de debug.
- */
 export function useMapRouting(userPositionRef, selectedLocationRef, currentFloorRef, mapScaleRef, mapDimensionsRef, waypointsRef) {
   const routeSegments = ref([]);
   const debugWaypoints = ref([]);
   const routingError = ref(null);
 
-  // Algoritmo de Dijkstra (simples) para andar único
   function calculateRouteSameFloor(start, end, andar, allWaypoints) {
+    if (!start || !end || !andar || !allWaypoints) {
+      console.error("Valores indefinidos em calculateRouteSameFloor");
+      return [];
+    }
     const waypoints = allWaypoints.filter(wp => wp.andar === andar);
     const getDist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-    // Adiciona o start como um ponto temporário conectado aos vizinhos mais próximos
     const nodes = [...waypoints];
     const tempStart = { id: 'start', x: start.x, y: start.y, neighbors: [] };
     const tempEnd = { id: 'end', x: end.x, y: end.y, neighbors: [] };
 
-    // Conecta aos k vizinhos mais próximos (usando 3 por padrão)
     const k = 3;
     const sortedStart = [...waypoints].sort((a, b) => getDist(a, start) - getDist(b, start));
     const sortedEnd = [...waypoints].sort((a, b) => getDist(a, end) - getDist(b, end));
@@ -28,14 +25,12 @@ export function useMapRouting(userPositionRef, selectedLocationRef, currentFloor
 
     nodes.push(tempStart, tempEnd);
 
-    // Cria mapa de vizinhos
     const graph = {};
     nodes.forEach(wp => {
       const neighbors = wp.neighbors || wp.vizinhos || [];
       graph[wp.id] = neighbors;
     });
 
-    // Dijkstra
     const dist = {};
     const prev = {};
     const queue = new Set(nodes.map(n => n.id));
@@ -61,7 +56,6 @@ export function useMapRouting(userPositionRef, selectedLocationRef, currentFloor
       });
     }
 
-    // Reconstroi o caminho
     const path = [];
     let u = 'end';
     while (u && u !== 'start') {
@@ -74,8 +68,11 @@ export function useMapRouting(userPositionRef, selectedLocationRef, currentFloor
     return path;
   }
 
-  // Rota entre andares com troca via escada/elevador
   function calculateRouteBetweenFloors(start, end, andarStart, andarEnd, allWaypoints) {
+    if (!start || !end || !andarStart || !andarEnd || !allWaypoints) {
+      console.error("Valores indefinidos em calculateRouteBetweenFloors");
+      return [];
+    }
     if (andarStart === andarEnd) {
       return calculateRouteSameFloor(start, end, andarStart, allWaypoints);
     }
@@ -103,52 +100,62 @@ export function useMapRouting(userPositionRef, selectedLocationRef, currentFloor
     }
 
     const rota1 = calculateRouteSameFloor(start, escadaInicio, andarStart, allWaypoints);
-    const rota2 = [{ x: escadaDestino.x, y: escadaDestino.y }]; // troca de andar
+    const rota2 = [{ x: escadaDestino.x, y: escadaDestino.y }];
     const rota3 = calculateRouteSameFloor(escadaDestino, end, andarEnd, allWaypoints);
 
     return [...rota1, ...rota2, ...rota3];
   }
 
-  // Atualiza a rota sempre que algo mudar
   watch(
     [userPositionRef, selectedLocationRef, currentFloorRef, mapScaleRef, mapDimensionsRef, waypointsRef],
     () => {
-      const start = userPositionRef.value;
-      const endLocation = selectedLocationRef.value;
-      const andarAtual = currentFloorRef.value;
-      const waypoints = waypointsRef.value || [];
+      try {
+        if (!userPositionRef.value || !selectedLocationRef.value || !currentFloorRef.value || !waypointsRef.value) {
+          routeSegments.value = [];
+          return;
+        }
 
-      routingError.value = null;
+        const start = userPositionRef.value;
+        const endLocation = selectedLocationRef.value;
+        const andarAtual = currentFloorRef.value;
+        const waypoints = waypointsRef.value || [];
 
-      if (!start || !endLocation) {
+        routingError.value = null;
+
+        if (!start || !endLocation) {
+          routeSegments.value = [];
+          return;
+        }
+
+        const end = { x: endLocation.x, y: endLocation.y };
+        const andarDestino = endLocation.andar;
+
+        const path = calculateRouteBetweenFloors(start, end, andarAtual, andarDestino, waypoints);
+
+        debugWaypoints.value = waypoints;
+
         routeSegments.value = [];
-        return;
-      }
 
-      const end = { x: endLocation.x, y: endLocation.y };
-      const andarDestino = endLocation.andar;
+        for (let i = 0; i < path.length - 1; i++) {
+          const p1 = path[i];
+          const p2 = path[i + 1];
 
-      const path = calculateRouteBetweenFloors(start, end, andarAtual, andarDestino, waypoints);
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-      debugWaypoints.value = waypoints;
-
-      routeSegments.value = [];
-
-      for (let i = 0; i < path.length - 1; i++) {
-        const p1 = path[i];
-        const p2 = path[i + 1];
-
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-        routeSegments.value.push({
-          x: p1.x,
-          y: p1.y,
-          length,
-          angle
-        });
+          routeSegments.value.push({
+            x: p1.x,
+            y: p1.y,
+            length,
+            angle
+          });
+        }
+      } catch (error) {
+        console.error("Erro durante o calculo da rota:", error);
+        routingError.value = "Erro interno ao calcular a rota.";
+        routeSegments.value = [];
       }
     },
     { immediate: true }
