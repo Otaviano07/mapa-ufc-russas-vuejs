@@ -118,8 +118,8 @@ const filteredLocais = computed(() => {
 /* Botão para abrir o menu lateral */
 .btn-open-sidebar {
   position: fixed;
-  top: 20px;
-  left: 20px;
+  bottom: 20px; /* Movido para o canto inferior */
+  right: 20px; /* Alinhado à direita */
   padding: 10px 20px;
   background-color: #3498db;
   color: white;
@@ -133,5 +133,34 @@ const filteredLocais = computed(() => {
 
 .btn-open-sidebar:hover {
   background-color: #2980b9;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+  .app-sidebar {
+    width: 100%; /* O menu lateral ocupa toda a largura em telas menores */
+  }
+
+  .btn-open-sidebar {
+    bottom: 10px; /* Ajusta a posição em telas menores */
+    right: 10px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-sidebar-title {
+    font-size: 1rem; /* Reduz o tamanho do título em telas muito pequenas */
+  }
+
+  .app-sidebar-search input {
+    padding: 6px;
+    font-size: 0.9rem;
+  }
+
+  .app-sidebar-list {
+    padding: 8px;
+  }
 }
 </style>

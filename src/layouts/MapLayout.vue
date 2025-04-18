@@ -1,11 +1,23 @@
 <template>
   <div class="map-container">
-    <router-link to="/admin" class="btn-link">Acessar Admin</router-link>
+    <!-- Botão de engrenagem para acessar Admin -->
+    <router-link to="/admin" class="btn-settings">
+      <i class="fas fa-cog"></i>
+    </router-link>
+    <div class="map-controls">
+      <button @click="zoomIn" class="btn-zoom">+</button>
+      <button @click="zoomOut" class="btn-zoom">-</button>
+      <button @click="resetView" class="btn-zoom">Resetar</button>
+    </div>
     <div v-if="loading" class="loading">Carregando mapa...</div>
     <div v-if="error" class="error">{{ error }}</div>
 
     <div v-if="mapScale && mapDimensions && andarAtualInfo.image" class="map-content"
-         :style="{ width: `${mapDimensions.width}px`, height: `${mapDimensions.height}px` }">
+         :style="mapStyle"
+         @mousedown="startDragging"
+         @mousemove="dragging"
+         @mouseup="stopDragging"
+         @mouseleave="stopDragging">
       <img :src="andarAtualInfo.image" alt="Mapa do Andar" class="map-image" @error="handleImageError" />
 
       <div v-for="loc in locations" :key="loc.id" class="location-pin"
@@ -128,7 +140,6 @@ watch(
  * @param {Object} location - The location object to be set as the selected location.
  */
 
-
 function selectLocation(location) {
   selectedLocation.value = location;
 }
@@ -137,6 +148,49 @@ function clearSelection() {
   selectedLocation.value = null;
 }
 
+// Adiciona suporte para zoom e movimentação
+const zoomLevel = ref(1); // Nível de zoom inicial
+const translateX = ref(0); // Posição horizontal inicial
+const translateY = ref(0); // Posição vertical inicial
+const isDragging = ref(false);
+const dragStart = ref({ x: 0, y: 0 });
+
+const mapStyle = computed(() => ({
+  transform: `scale(${zoomLevel.value}) translate(${translateX.value}px, ${translateY.value}px)`,
+  transformOrigin: 'center center',
+}));
+
+function zoomIn() {
+  zoomLevel.value = Math.min(zoomLevel.value + 0.1, 3); // Limita o zoom máximo a 3x
+}
+
+function zoomOut() {
+  zoomLevel.value = Math.max(zoomLevel.value - 0.1, 0.5); // Limita o zoom mínimo a 0.5x
+}
+
+function resetView() {
+  zoomLevel.value = 1;
+  translateX.value = 0;
+  translateY.value = 0;
+}
+
+function startDragging(event) {
+  isDragging.value = true;
+  dragStart.value = { x: event.clientX, y: event.clientY };
+}
+
+function dragging(event) {
+  if (!isDragging.value) return;
+  const deltaX = event.clientX - dragStart.value.x;
+  const deltaY = event.clientY - dragStart.value.y;
+  translateX.value += deltaX / zoomLevel.value; // Ajusta com base no nível de zoom
+  translateY.value += deltaY / zoomLevel.value;
+  dragStart.value = { x: event.clientX, y: event.clientY };
+}
+
+function stopDragging() {
+  isDragging.value = false;
+}
 </script>
 
 <style scoped>
@@ -145,11 +199,45 @@ function clearSelection() {
   width: 100%;
   height: 100vh;
   background-color: #f0f0f0; /* Adicionado para evitar fundo vazio */
+  overflow: hidden;
+}
+
+.map-controls {
+  position: absolute;
+  bottom: 10px; /* Alterado de 'button' para 'bottom' */
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.btn-zoom {
+  padding: 10px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease;
+}
+
+.btn-zoom:hover {
+  background-color: #2980b9;
 }
 
 .map-content {
   position: relative;
-  border: 1px solid #ccc;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  transition: transform 0.2s ease;
+}
+
+.map-content:active {
+  cursor: grabbing;
 }
 
 .map-image {
@@ -204,5 +292,66 @@ function clearSelection() {
   color: #fff;
   text-decoration: none;
   border-color: #2980b9;
+}
+
+/* Estilo para o botão de engrenagem */
+.btn-settings {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: background-color 0.3s ease;
+  text-decoration: none;
+  z-index: 1000;
+}
+
+.btn-settings:hover {
+  background-color: #2980b9;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+  .map-container {
+    padding: 10px; /* Reduz o espaçamento em telas menores */
+  }
+
+  .map-content {
+    width: 100%; /* Garante que o mapa ocupa toda a largura */
+    height: auto; /* Ajusta a altura automaticamente */
+  }
+
+  .user-position,
+  .location-pin {
+    font-size: 0.8rem; /* Reduz o tamanho do texto */
+    padding: 4px; /* Ajusta o espaçamento */
+  }
+
+  .btn-settings {
+    width: 20px;
+    height: 20px;
+    right: 15px;
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .map-container {
+    padding: 5px;
+  }
+
+  .map-content {
+    height: 300px; /* Define uma altura fixa para o mapa em telas muito pequenas */
+  }
 }
 </style>

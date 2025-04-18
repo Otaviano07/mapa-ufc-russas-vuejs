@@ -850,4 +850,32 @@ input[disabled] { /* Style disabled inputs */
     transform: translateY(0);
   }
 }
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+  .admin-container {
+    padding: 10px;
+  }
+
+  .locations-table th,
+  .locations-table td {
+    font-size: 0.9rem; /* Reduz o tamanho do texto */
+    padding: 8px; /* Ajusta o espaçamento */
+  }
+
+  .btn {
+    padding: 6px 12px; /* Reduz o tamanho dos botões */
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .locations-table {
+    font-size: 0.8rem; /* Reduz ainda mais o tamanho do texto */
+  }
+
+  .modal {
+    width: 90%; /* Ajusta a largura do modal para telas pequenas */
+  }
+}
 </style>
