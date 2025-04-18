@@ -20,12 +20,10 @@ onMounted(() => {
   /* If it adds content, style it here */
   width: 100%;
   height: 100%;
-  /* Example:
   display: flex;
   justify-content: center;
   align-items: center;
   font-style: italic;
   color: #888;
-  */
 }
 </style>

@@ -58,21 +58,41 @@ class LocationService {
     return locationsData.find(loc => loc.id === id);
   }
 
-  /**
-   * Cria uma nova localização
-   * @param {Object} locationData - Dados da nova localização
-   * @returns {Promise<Object>} A nova localização criada
-   */
-  async createLocation(locationData) {
-    await new Promise(resolve => setTimeout(resolve, 400));
-    
-    // Simulando criação (na prática, isso seria feito por um backend)
-    const newId = Math.max(...locationsData.map(loc => loc.id)) + 1;
-    const newLocation = { id: newId, ...locationData };
-    locationsData.push(newLocation);
-    
-    return newLocation;
+/**
+ * Cria uma nova localização enviando os dados para a API do Google Apps Script.
+ * @param {Object} locationData - Dados da nova localização.
+ * @returns {Promise<Object>} A nova localização criada.
+ */
+async createLocation(locationData) {
+  const apiUrl = `${import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL}?action=create`;
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(locationData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro ao criar local: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    if (result.status === 'success') {
+      return {
+        id: result.id,
+        ...locationData,
+      };
+    } else {
+      throw new Error(result.message || 'Erro desconhecido ao criar local.');
+    }
+  } catch (error) {
+    console.error('Erro ao criar local:', error);
+    throw error;
   }
+}
 
   /**
    * Atualiza uma localização existente

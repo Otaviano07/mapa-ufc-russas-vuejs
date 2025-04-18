@@ -7,46 +7,59 @@
     <div v-if="localError" class="error">{{ localError }}</div>
     <div v-if="localSuccessMessage" class="success">{{ localSuccessMessage }}</div>
 
+    <!-- Botão para abrir o formulário -->
     <button @click="showAddForm" :disabled="localLoading || showForm" class="btn btn-primary">Adicionar Novo Local</button>
 
-    <div v-if="showForm" class="form-section">
-      <h2>{{ isEditing ? 'Editar Local' : 'Adicionar Local' }}</h2>
-      <form @submit.prevent="handleSubmit">
-        <div class="form-group" v-if="isEditing">
-          <label for="id">ID:</label>
-          <input type="text" id="id" :value="formData.id" disabled>
-        </div>
-        <div class="form-group">
-           <label for="tipo">Tipo:</label>
-           <select id="tipo" v-model="formData.tipo" required>
-             <option v-for="tipo in tiposDisponiveis" :key="tipo" :value="tipo">
-               {{ tipo.charAt(0).toUpperCase() + tipo.slice(1) }}
-             </option>
-           </select>
-         </div>
-        <div class="form-group">
-          <label for="nome">Nome:</label>
-          <input type="text" id="nome" v-model="formData.nome" required>
-        </div>
-        <div class="form-group">
-          <label for="andar">Andar:</label>
-           <select id="andar" v-model="formData.andar" required>
-             <option v-for="andar in andaresDisponiveis" :key="andar" :value="andar">
-               {{ andar.charAt(0).toUpperCase() + andar.slice(1) }}
-             </option>
-           </select>
-        </div>
-        <div class="form-group">
-          <label for="x">Coordenada X (0-100):</label>
-          <input type="number" id="x" v-model.number="formData.x" required step="0.01" min="0" max="100"> </div>
-        <div class="form-group">
-          <label for="y">Coordenada Y (0-100):</label>
-          <input type="number" id="y" v-model.number="formData.y" required step="0.01" min="0" max="100"> </div>
-        <div class="form-actions">
-          <button type="submit" :disabled="localLoading" class="btn btn-success">{{ isEditing ? 'Salvar Alterações' : 'Criar Local' }}</button>
-          <button type="button" @click="cancelForm" :disabled="localLoading" class="btn btn-secondary">Cancelar</button>
-        </div>
-      </form>
+    <!-- Formulário exibido como modal -->
+    <div v-if="showForm" class="modal-overlay">
+      <div class="modal">
+        <h2>{{ isEditing ? 'Editar Local' : 'Novo Local' }}</h2>
+        <form @submit.prevent="handleSubmit">
+          <div class="form-group" v-if="isEditing">
+            <label for="id">ID:</label>
+            <input type="text" id="id" :value="formData.id" disabled>
+          </div>
+          <div class="form-group">
+            <label for="nome">Nome:</label>
+            <input type="text" id="nome" v-model="formData.nome" required>
+          </div>
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="tipo">Tipo:</label>
+              <select id="tipo" v-model="formData.tipo" required>
+                <option v-for="tipo in tiposDisponiveis" :key="tipo" :value="tipo">
+                  {{ tipo.charAt(0).toUpperCase() + tipo.slice(1) }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="andar">Andar:</label>
+              <select id="andar" v-model="formData.andar" required>
+                <option v-for="andar in andaresDisponiveis" :key="andar" :value="andar">
+                  {{ andar.charAt(0).toUpperCase() + andar.slice(1) }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group-row">
+            <div class="form-group">
+              <label for="x">Coordenada X:</label>
+              <input type="number" id="x" v-model.number="formData.x" disabled />
+            </div>
+            <div class="form-group">
+              <label for="y">Coordenada Y:</label>
+              <input type="number" id="y" v-model.number="formData.y" disabled />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" @click="cancelForm" :disabled="localLoading" class="btn btn-secondary">Cancelar</button>
+            <button type="submit" :disabled="localLoading" class="btn btn-success">
+              {{ isEditing ? 'Salvar Alterações' : 'Salvar Local' }}
+            </button>
+            
+          </div>
+        </form>
+      </div>
     </div>
 
     <h2>Locais Existentes</h2>
@@ -65,11 +78,11 @@
         </thead>
         <tbody>
           <tr v-if="locations.length === 0 && !localLoading && !localError">
-            <td colspan="7" style="text-align: center;">Nenhum local cadastrado.</td>
+            <td colspan="7" class="empty-row">Nenhum local cadastrado.</td>
           </tr>
           <tr v-if="locations.length === 0 && localError">
-             <td colspan="7" style="text-align: center; color: red;">Falha ao carregar locais.</td>
-           </tr>
+            <td colspan="7" class="error-row">Falha ao carregar locais.</td>
+          </tr>
           <tr v-for="loc in locations" :key="loc.id">
             <td>{{ loc.id }}</td>
             <td>{{ loc.tipo || 'N/A' }}</td>
@@ -78,7 +91,14 @@
             <td>{{ loc.y?.toFixed ? loc.y.toFixed(2) : loc.y }}</td>
             <td>{{ loc.andar }}</td>
             <td>
-              <button @click="showEditForm(loc)" :disabled="localLoading || showForm" class="btn btn-warning btn-sm">Editar</button> <button @click="confirmDelete(loc.id)" :disabled="localLoading || showForm" class="btn btn-danger btn-sm">Excluir</button> </td>
+              <div class="dropdown" @click.stop>
+                <button class="btn btn-actions" @click="toggleDropdown(loc.id)">Ações</button>
+                <div v-if="dropdownOpen === loc.id" class="dropdown-menu">
+                  <button @click="showEditForm(loc)" :disabled="localLoading || showForm" class="dropdown-item">Editar</button>
+                  <button @click="confirmDelete(loc.id)" :disabled="localLoading || showForm" class="dropdown-item">Excluir</button>
+                </div>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -87,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 // Assuming LocationService instance is exported as default or named export
 import locationService from '@/services/LocationService.js'; // Adjusted import assuming default/named export
@@ -169,6 +189,11 @@ const resetForm = () => {
 onMounted(() => {
   loadLocations();
   loadFormFromStorage(); // Load potentially saved form state
+  document.addEventListener('click', closeDropdown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeDropdown);
 });
 
 // Watch relevant states to save to localStorage
@@ -279,12 +304,36 @@ const handleSubmit = async () => {
   await handleSaveLocation(); // Call the combined save function
 };
 
+// Função para transformar latitude e longitude em valores entre 0 e 100
+const transformCoordinates = (latitude, longitude) => {
+  const minLat = -4.973; // Valor mínimo de latitude no mapa
+  const maxLat = -4.971; // Valor máximo de latitude no mapa
+  const minLon = -37.978; // Valor mínimo de longitude no mapa
+  const maxLon = -37.976; // Valor máximo de longitude no mapa
+
+  const x = ((longitude - minLon) / (maxLon - minLon)) * 100;
+  const y = ((latitude - minLat) / (maxLat - minLat)) * 100;
+
+  return { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
+};
+
 function showAddForm() {
-  resetForm();
-  isEditing.value = false;
-  showForm.value = true;
-  localError.value = null; // Clear messages when opening form
-  localSuccessMessage.value = null;
+  const defaultLat = -4.972; // Latitude padrão para novos locais
+  const defaultLon = -37.977; // Longitude padrão para novos locais
+
+  // Calcula os valores iniciais de x e y
+  const { x, y } = transformCoordinates(defaultLat, defaultLon);
+
+  formData.value = {
+    ...defaultFormData(),
+    x, // Coordenada X calculada
+    y, // Coordenada Y calculada
+  };
+
+  isEditing.value = false; // Define que não está editando
+  showForm.value = true; // Exibe o formulário
+  localError.value = null; // Limpa mensagens de erro
+  localSuccessMessage.value = null; // Limpa mensagens de sucesso
 }
 
 function showEditForm(location) {
@@ -314,6 +363,16 @@ function confirmDelete(id) {
   if (window.confirm(`Tem certeza que deseja excluir o local com ID "${id}"? Esta ação não pode ser desfeita.`)) {
     handleDeleteLocation(id);
   }
+}
+
+const dropdownOpen = ref(null); // Controle do menu suspenso
+
+function toggleDropdown(id) {
+  dropdownOpen.value = dropdownOpen.value === id ? null : id; // Alterna entre abrir e fechar
+}
+
+function closeDropdown() {
+  dropdownOpen.value = null; // Fecha o menu suspenso
 }
 </script>
 
@@ -366,6 +425,26 @@ function confirmDelete(id) {
   border-color: #2980b9;
 }
 
+/* Estilo para o botão "Acessar Admin" */
+.btn-admin {
+  display: inline-block;
+  color: #3498db;
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.btn-admin:hover {
+  background-color: #3498db;
+  color: #fff;
+  text-decoration: none;
+  border-color: #2980b9;
+}
 
 /* Messages */
 .loading, .error, .success {
@@ -506,84 +585,269 @@ input[disabled] { /* Style disabled inputs */
 /* Table Styling */
 .table-container {
   margin-top: 20px;
-  max-height: calc(100vh - 400px); /* Adjust max-height based on other elements */
-  overflow-y: auto;
+  overflow-x: auto; /* Permite rolagem horizontal em telas pequenas */
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   border: 1px solid #e2e8f0;
-  scrollbar-width: thin;
-  scrollbar-color: #94a3b8 #f1f5f9;
 }
-
-.table-container::-webkit-scrollbar { width: 8px; }
-.table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
-.table-container::-webkit-scrollbar-thumb { background-color: #94a3b8; border-radius: 8px; border: 2px solid #f1f5f9; }
 
 .locations-table {
   width: 100%;
-  border-collapse: separate; /* Use separate for spacing + border radius */
+  border-collapse: collapse; /* Remove espaçamento entre células */
   border-spacing: 0;
-  border-radius: 8px; /* Ensure table respects container radius */
-  overflow: hidden; /* Clip content to rounded corners */
+  text-align: left;
 }
 
 .locations-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.locations-table th {
   background-color: #f8fafc;
   color: #1e293b;
   font-weight: 600;
-  padding: 14px 16px; /* Adjusted padding */
-  text-align: left;
+}
+
+.locations-table th {
+  padding: 12px 16px;
   border-bottom: 2px solid #e2e8f0;
-  white-space: nowrap;
-  font-size: 0.9rem; /* Smaller header text */
+  font-size: 0.9rem;
+  text-transform: uppercase;
 }
 
 .locations-table td {
-  padding: 12px 16px; /* Adjusted padding */
+  padding: 12px 16px;
   border-bottom: 1px solid #e2e8f0;
-  color: #475569;
   font-size: 0.95rem;
-  vertical-align: middle; /* Align button vertically */
-}
-
-.locations-table tr:last-child td {
-  border-bottom: none;
-}
-
-.locations-table tbody tr {
-  transition: background-color 0.2s ease; /* Smoother hover */
+  color: #475569;
 }
 
 .locations-table tbody tr:hover {
+  background-color: #f1f5f9; /* Cor de destaque ao passar o mouse */
+}
+
+.locations-table tbody tr:last-child td {
+  border-bottom: none; /* Remove a borda inferior da última linha */
+}
+
+.empty-row {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.error-row {
+  text-align: center;
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+/* Botões na tabela */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.875rem;
+}
+
+.btn-warning {
+  background-color: #f1c40f;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: #f39c12;
+}
+
+.btn-danger {
+  background-color: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #c0392b;
+}
+
+/* Estilo do modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 70%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Diferenciação visual para campos de entrada e seleção */
+.modal input[type="text"],
+.modal input[type="number"] {
+  background-color: #f9f9f9; /* Cor clara para campos de entrada */
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.modal select {
+  background-color: #eef6ff; /* Cor azul clara para campos de seleção */
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.modal input[type="text"]:focus,
+.modal input[type="number"]:focus,
+.modal select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+/* Estilo para os rótulos */
+.modal label {
+  font-weight: bold;
+  margin-bottom: 5px;
+  display: block;
+  color: #2c3e50;
+}
+
+/* Botões no modal */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-success {
+  background-color: #2ecc71;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-success:hover {
+  background-color: #27ae60;
+}
+
+.btn-secondary {
+  background-color: #95a5a6;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: #7f8c8d;
+}
+
+/* Estilo para alinhar os campos de coordenadas lado a lado */
+.form-group-row {
+  display: flex;
+  gap: 20px; /* Espaçamento entre os campos */
+}
+
+.form-group-row .form-group {
+  flex: 1; /* Faz com que os campos tenham o mesmo tamanho */
+}
+
+/* Estilo para o botão de ações */
+.btn-actions {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-actions:hover {
+  background-color: #2980b9;
+  transform: translateY(-2px); /* Efeito de elevação ao passar o mouse */
+}
+
+.btn-actions:active {
+  transform: translateY(0); /* Remove elevação ao clicar */
+}
+
+/* Estilo do menu suspenso */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 5px); /* Espaçamento entre o botão e o menu */
+  left: 0;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 140px;
+  padding: 8px 0;
+  animation: fadeIn 0.2s ease-in-out; /* Animação de entrada */
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dropdown-item:hover {
   background-color: #f1f5f9;
+  color: #1e293b;
 }
 
-/* Ensure last button in cell has no margin */
-.locations-table td button:last-child {
-    margin-right: 0;
+.dropdown-item:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
 }
 
-/* Center text in specific columns if needed */
-.locations-table th:nth-child(1), /* ID */
-.locations-table td:nth-child(1),
-.locations-table th:nth-child(4), /* X */
-.locations-table td:nth-child(4),
-.locations-table th:nth-child(5), /* Y */
-.locations-table td:nth-child(5) {
-    text-align: center;
+/* Animação de entrada do menu */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-
-.locations-table th:last-child, /* Actions */
-.locations-table td:last-child {
-    text-align: center;
-     white-space: nowrap; /* Prevent wrapping of buttons */
-}
-
 </style>
